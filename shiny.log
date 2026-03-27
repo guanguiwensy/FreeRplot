@@ -1,0 +1,11 @@
+Loading required package: shiny
+Warning: package 'shiny' was built under R version 4.5.3
+Warning: package 'rhandsontable' was built under R version 4.5.3
+Warning: package 'shinycssloaders' was built under R version 4.5.3
+Warning: package 'ggridges' was built under R version 4.5.3
+Warning: package 'treemapify' was built under R version 4.5.3
+Warning: package 'ggDNAvis' was built under R version 4.5.3
+Warning: package 'circlize' was built under R version 4.5.3
+Warning: package 'colourpicker' was built under R version 4.5.3
+
+Listening on http://127.0.0.1:3838
