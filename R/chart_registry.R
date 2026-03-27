@@ -1,5 +1,30 @@
-# R/chart_registry.R
-# Registry loader: discover per-chart definition files from R/charts/*.
+# =============================================================================
+# File   : R/chart_registry.R
+# Purpose: Auto-discovers and registers all chart definition files found under
+#          R/charts/**/*.R.  Each file must assign a `chart_def` list with the
+#          required fields; this loader validates and indexes them into CHARTS.
+#
+# Globals exported:
+#   CHARTS    named list — chart_id → chart_def object.
+#             Available after source("R/chart_registry.R") in global.R.
+#   CHART_IDS chr vector — names(CHARTS) in menu order.
+#
+# Required fields in each chart_def:
+#   id            [chr]  unique snake_case identifier (must match filename key)
+#   name          [chr]  display name (Chinese)
+#   name_en       [chr]  display name (English)
+#   category      [chr]  group label
+#   plot_fn       [function(data, options)]  draws and returns a ggplot/circos object
+#   sample_data   [data.frame]              default demo data
+#   options_def   [list]  option descriptor objects (see ui_helpers.R)
+#   code_template [function(options) | function(options, data)]  generates R code string
+#
+# Internal functions:
+#   .load_charts_from_files(charts_dir)
+#     Recursively sources *.R files in charts_dir, collects chart_def objects.
+#     Parameters: charts_dir [chr] path relative to APP_DIR.
+#     Returns: named list of validated chart_def objects.
+# =============================================================================
 
 .load_charts_from_files <- function(charts_dir = file.path("R", "charts")) {
   files <- list.files(

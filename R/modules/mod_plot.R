@@ -1,5 +1,34 @@
-# R/modules/mod_plot.R
-# Plot-side server logic: generation, rendering, download, code output, and gallery.
+# =============================================================================
+# File   : R/modules/mod_plot.R
+# Purpose: Plot server module — reacts to generate_btn, renders the ggplot to
+#          the main canvas, exports R code, handles PNG/PDF downloads, and
+#          builds the chart gallery tab.
+#
+# Depends: R/plot_core.R    (generate_plot, COLOR_PALETTES, CHART_THEMES)
+#          R/ui_helpers.R   (collect_options, CHART_MENU_GROUPS)
+#          R/utils/logger.R (log_debug, log_error, safe_run)
+#
+# Exported functions:
+#   init_mod_plot(input, output, session, rv)
+#     Registers all observers and outputs for the plot panel.
+#     Parameters:
+#       input   [Shiny input]
+#       output  [Shiny output]
+#       session [Shiny session]
+#       rv      [reactiveValues]  uses: rv$current_data, rv$current_plot
+#
+# Key reactives / outputs:
+#   active_data()          reactive — returns live table data (edited or rv$current_data)
+#   build_plot_options()   reactive — collects all input widgets into an options list
+#   output$main_plot       renderPlot — renders rv$current_plot or placeholder
+#   output$r_code_output   renderText — reproducible R code block
+#   output$download_plot   downloadHandler — PNG
+#   output$download_plot_pdf downloadHandler — PDF
+#   output$download_csv    downloadHandler — sample data CSV
+#   output$chart_gallery_ui renderUI — pill-tabset of chart buttons
+# =============================================================================
+
+MODULE <- "mod_plot"
 
 init_mod_plot <- function(input, output, session, rv) {
 
@@ -86,6 +115,7 @@ init_mod_plot <- function(input, output, session, rv) {
 
   observeEvent(input$generate_btn, {
     req(input$chart_type_select)
+    log_debug(MODULE, "generate_btn: chart=%s", input$chart_type_select)
 
     data <- active_data()
     if (is.null(data) || nrow(data) == 0) {
@@ -95,17 +125,17 @@ init_mod_plot <- function(input, output, session, rv) {
 
     options <- build_plot_options()
 
-    p <- tryCatch(
-      generate_plot(input$chart_type_select, data, options),
-      error = function(e) {
-        showNotification(paste("Plot failed:", e$message), type = "error", duration = 8)
-        NULL
-      }
-    )
-
-    if (!is.null(p)) {
-      rv$current_plot <- p
+    p <- safe_run(MODULE, generate_plot(input$chart_type_select, data, options))
+    if (is.null(p)) {
+      showNotification(
+        paste0("Plot failed for '", input$chart_type_select, "'. Check RPLOT_LOG=DEBUG for details."),
+        type = "error", duration = 8
+      )
+      return()
     }
+
+    log_info(MODULE, "plot generated: chart=%s rows=%d", input$chart_type_select, nrow(data))
+    rv$current_plot <- p
   })
 
   output$main_plot <- renderPlot({

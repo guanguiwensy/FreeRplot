@@ -1,8 +1,35 @@
-# R/preset_manager.R
-# Preset save / load / delete — file-backed JSON storage.
+# =============================================================================
+# File   : R/preset_manager.R
+# Purpose: User preset save / load / delete.  Presets are stored as JSON files
+#          under APP_DIR/presets/{chart_id}.json.  Each file contains a named
+#          list of preset objects: { preset_name: { param: value, ... } }.
 #
-# Layout on disk:
-#   presets/{chart_id}.json
+# Disk layout:
+#   presets/
+#     scatter_basic.json   — {"My Preset": {alpha: 0.7, ...}, ...}
+#     bar.json
+#     ...
+#
+# Functions:
+#   list_preset_names(chart_id)
+#     Returns character vector of saved preset names for chart_id.
+#     Returns character(0) if no presets file exists.
+#
+#   load_presets(chart_id)
+#     Returns named list of all preset objects for chart_id.
+#     Returns empty list on missing file or parse error.
+#
+#   save_preset(chart_id, name, values)
+#     Adds or overwrites a preset entry in the JSON file.
+#     Parameters: chart_id [chr]; name [chr] preset name; values [list] flat params.
+#
+#   delete_preset(chart_id, name)
+#     Removes the named preset entry from the JSON file.
+#
+#   restore_preset_inputs(chart, values, session)
+#     Pushes saved values back into Shiny input widgets via update*Input calls.
+#     Parameters: chart [list] chart_def; values [list] saved params; session [Shiny session].
+# =============================================================================
 #
 # Each file is a JSON object:
 #   {

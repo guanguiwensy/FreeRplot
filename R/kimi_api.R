@@ -1,9 +1,52 @@
-# R/kimi_api.R
-# LLM API integration — OpenAI-compatible format, multi-provider.
+# =============================================================================
+# File   : R/kimi_api.R
+# Purpose: LLM API client (OpenAI-compatible format).  Supports all providers
+#          registered in LLM_PROVIDERS (Kimi, DeepSeek, Qwen, Zhipu, OpenAI,
+#          and any custom OpenAI-compatible endpoint).
+#          Also owns chart-recommendation JSON parsing.
+#
+# Depends: R/config_manager.R (KIMI_API_URL fallback, LLM_PROVIDERS)
+#          httr2, jsonlite     (loaded globally)
+#
+# Functions:
+#   chat_with_llm(messages, api_key, model, api_url)
+#     Sends a chat/completions request and returns a normalised result list.
+#     Parameters:
+#       messages [list]  OpenAI message objects {role, content}
+#       api_key  [chr]   bearer token
+#       model    [chr]   model identifier
+#       api_url  [chr]   full chat completions URL (default: KIMI_API_URL)
+#     Returns: list(success [lgl], content [chr], suggestion [list|NULL])
+#
+#   chat_with_kimi(messages, api_key, model)
+#     Backward-compatible wrapper that calls chat_with_llm with the Kimi URL.
+#
+#   parse_chart_suggestion(text)
+#     Extracts the ```json ... ``` block from an LLM response and normalises
+#     it into a suggestion payload.
+#     Returns: list | NULL
+#
+#   normalize_suggestion_payload(parsed)
+#     Normalises a raw parsed list into {primary, primary_idx, recommendations}.
+#
+#   normalize_recommendation_item(item)
+#     Normalises a single recommendation object; returns NULL if invalid.
+# =============================================================================
 
-KIMI_API_URL <- "https://api.moonshot.cn/v1/chat/completions"  # kept for backward compat
+# ---------------------------------------------------------------------------
+# Environment isolation via local():
+#   KIMI_API_URL and the two normalize_* helpers are private.
+#   Only chat_with_llm, chat_with_kimi, parse_chart_suggestion are exported.
+# ---------------------------------------------------------------------------
+local({
 
-normalize_recommendation_item <- function(item) {
+.KIMI_API_URL <- "https://api.moonshot.cn/v1/chat/completions"
+
+# Make the URL accessible to intent_engine.R (backward compat) via a
+# read-only global alias — but the internal constant stays private.
+KIMI_API_URL <<- .KIMI_API_URL
+
+.normalize_recommendation_item <- function(item) {
   chart_id <- item$chart_id %||% item$recommended_chart
   if (is.null(chart_id)) return(NULL)
 
@@ -37,16 +80,16 @@ normalize_recommendation_item <- function(item) {
   )
 }
 
-normalize_suggestion_payload <- function(parsed) {
+.normalize_suggestion_payload <- function(parsed) {
   recs <- list()
 
   if (!is.null(parsed$recommendations) && is.list(parsed$recommendations)) {
-    recs <- lapply(parsed$recommendations, normalize_recommendation_item)
+    recs <- lapply(parsed$recommendations, .normalize_recommendation_item)
     recs <- Filter(Negate(is.null), recs)
   }
 
   if (length(recs) == 0) {
-    one <- normalize_recommendation_item(parsed)
+    one <- .normalize_recommendation_item(parsed)
     if (!is.null(one)) recs <- list(one)
   }
 
@@ -59,22 +102,22 @@ normalize_suggestion_payload <- function(parsed) {
   primary_rec <- recs[[primary_idx]]
 
   list(
-    primary = primary_rec$chart_id,
-    primary_idx = primary_idx,
+    primary            = primary_rec$chart_id,
+    primary_idx        = primary_idx,
     primary_confidence = primary_rec$confidence,
-    recommended_chart = primary_rec$chart_id,
-    confidence = primary_rec$confidence,
-    recommendations = recs
+    recommended_chart  = primary_rec$chart_id,
+    confidence         = primary_rec$confidence,
+    recommendations    = recs
   )
 }
 
-# Generic LLM call (OpenAI-compatible format, works for all supported providers)
-chat_with_llm <- function(messages, api_key, model, api_url = KIMI_API_URL) {
+# ── Exported: generic LLM call (OpenAI-compatible, all providers) ─────────────
+chat_with_llm <<- function(messages, api_key, model, api_url = .KIMI_API_URL) {
   if (is.null(api_key) || nchar(trimws(api_key)) == 0) {
-    return(list(success = FALSE, content = "请先在设置中配置 API Key。", suggestion = NULL))
+    return(list(success = FALSE, content = "Please configure an API Key in Settings.", suggestion = NULL))
   }
   if (is.null(api_url) || nchar(trimws(api_url)) == 0) {
-    return(list(success = FALSE, content = "API URL 未配置，请在设置中检查。", suggestion = NULL))
+    return(list(success = FALSE, content = "API URL not configured. Check Settings.", suggestion = NULL))
   }
 
   tryCatch({
@@ -98,21 +141,21 @@ chat_with_llm <- function(messages, api_key, model, api_url = KIMI_API_URL) {
     list(success = TRUE, content = content, suggestion = parse_chart_suggestion(content))
   }, error = function(e) {
     msg <- conditionMessage(e)
-    if      (grepl("401", msg))                            msg <- "API Key 无效，请检查配置。"
-    else if (grepl("429", msg))                            msg <- "请求频率超限，请稍后重试。"
-    else if (grepl("timeout|timed out", msg, ignore.case = TRUE)) msg <- "请求超时，请检查网络。"
+    if      (grepl("401", msg))                                    msg <- "Invalid API Key. Please check Settings."
+    else if (grepl("429", msg))                                    msg <- "Rate limit exceeded. Please retry later."
+    else if (grepl("timeout|timed out", msg, ignore.case = TRUE))  msg <- "Request timed out. Check your network."
 
-    list(success = FALSE, content = paste("API 调用失败:", msg), suggestion = NULL)
+    list(success = FALSE, content = paste("API call failed:", msg), suggestion = NULL)
   })
 }
 
-# Backward-compatible wrapper
-chat_with_kimi <- function(messages, api_key, model = "moonshot-v1-8k") {
-  chat_with_llm(messages, api_key, model, api_url = KIMI_API_URL)
+# ── Exported: backward-compatible Kimi wrapper ────────────────────────────────
+chat_with_kimi <<- function(messages, api_key, model = "moonshot-v1-8k") {
+  chat_with_llm(messages, api_key, model, api_url = .KIMI_API_URL)
 }
 
-# Extract structured suggestion JSON from model response text
-parse_chart_suggestion <- function(text) {
+# ── Exported: extract structured suggestion JSON from LLM response text ───────
+parse_chart_suggestion <<- function(text) {
   m <- regmatches(text, regexpr("```json[\\s\\S]*?```", text, perl = TRUE))
   if (length(m) == 0) return(NULL)
 
@@ -124,5 +167,7 @@ parse_chart_suggestion <- function(text) {
   )
   if (is.null(parsed)) return(NULL)
 
-  normalize_suggestion_payload(parsed)
+  .normalize_suggestion_payload(parsed)
 }
+
+}) # end local()

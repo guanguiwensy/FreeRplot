@@ -1,6 +1,55 @@
-# R/ui_helpers.R
-# Dynamic UI control builder for the options_def registry system.
-# Used by app.R to render per-chart option panels without hardcoding.
+# =============================================================================
+# File   : R/ui_helpers.R
+# Purpose: Dynamic UI generation driven by the chart options_def registry.
+#          Provides the two-level grouped dropdown, per-chart control panels,
+#          input collection, show_when conditional visibility, and the default
+#          options helper.
+#
+# Globals exported:
+#   CHART_MENU_GROUPS  named list — group label → vector of chart IDs.
+#                      Drives both the selectInput <optgroup> dropdown and the
+#                      gallery tab grouping.  This is the single source of
+#                      truth for chart ordering.  Add new IDs here when
+#                      registering a new chart in chart_registry.R.
+#
+# Functions:
+#   build_grouped_choices(charts, groups)
+#     Converts CHART_MENU_GROUPS + CHARTS into a Shiny-compatible named list
+#     rendered as <optgroup> elements by selectize.js.
+#     Parameters: charts [list] CHARTS registry; groups [list] defaults to CHART_MENU_GROUPS.
+#     Returns: named list suitable for selectInput(choices = ...).
+#
+#   build_controls(defs)
+#     Generates a tagList of Shiny input widgets from an options_def list.
+#     Controls with show_when are initially wrapped in shinyjs::hidden().
+#     Parameters: defs [list] subset of chart$options_def.
+#     Returns: tagList
+#
+#   collect_options(input)
+#     Reads all opt_* input values and returns them as a named list.
+#     Parameters: input [Shiny input] reactive input object.
+#     Returns: named list  e.g. list(alpha=0.7, show_smooth=TRUE, ...)
+#
+#   get_default_options(chart_id)
+#     Returns default option values from options_def for a chart.
+#     Parameters: chart_id [chr]
+#     Returns: named list
+#
+#   build_show_when_map(charts)
+#     Builds a nested map: widget_id → list(trigger_id → required_value).
+#     Used by apply_show_when() to toggle visibility reactively.
+#     Parameters: charts [list] full CHARTS registry.
+#     Returns: named list
+#
+#   apply_show_when(sw_map, chart_id, input)
+#     Shows/hides controls based on the current input state and sw_map.
+#     Parameters: sw_map [list]; chart_id [chr]; input [Shiny input].
+#
+#   build_system_prompt()
+#     Constructs the LLM system prompt listing all registered chart IDs,
+#     names, and descriptions.
+#     Returns: chr
+# =============================================================================
 
 
 # 鈹€鈹€ CHART_MENU_GROUPS 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€

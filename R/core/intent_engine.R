@@ -1,5 +1,48 @@
-# R/core/intent_engine.R
-# Natural-language intent extraction for chart parameter modification.
+# =============================================================================
+# File   : R/core/intent_engine.R
+# Purpose: Natural-language intent extraction engine.  Converts free-form user
+#          messages into structured intent objects that the chat module can
+#          apply directly to Shiny input widgets without a full AI roundtrip.
+#
+# Architecture (three-layer pipeline):
+#   1. extract_intent_local(user_text, chart_id)
+#        Fast local matching using INTENT_SYNONYMS dictionary + regex patterns.
+#        No API call.  Handles ~80% of common modification requests.
+#   2. extract_intent_llm(user_text, chart_id, api_key, model, api_url)
+#        Calls the configured LLM with a focused parameter-extractor prompt
+#        (NOT the chart-recommendation prompt).  Returns structured JSON.
+#   3. parse_intent(user_text, chart_id, api_key, model, api_url)
+#        Orchestrates layers 1→2: tries local first, falls back to LLM if
+#        local returns no hits, assigns confidence level, routes undo.
+#
+# Intent object structure (returned by parse_intent):
+#   list(
+#     intent_type        [chr]  "modify_current" | "recommend_new" | "undo" | "unknown"
+#     common_patch       [list] global params: plot_title, x_label, y_label,
+#                               color_palette, chart_theme, plot_width_in,
+#                               plot_height_in, plot_dpi, x/y_range_mode,
+#                               x/y_min, x/y_max
+#     options_patch      [list] chart-specific params keyed by options_def id
+#     confidence         [chr]  "high" | "medium" | "low"
+#     needs_clarification [lgl]
+#     clarify_question   [chr]  follow-up question for low-confidence intents
+#     source             [chr]  "local" | "llm" | "fallback"
+#     hits               [chr]  field names successfully extracted
+#   )
+#
+# Key constants:
+#   INTENT_SYNONYMS  named list — canonical param → Chinese/English alias vectors
+#   CHANGE_VERBS     chr  — verb phrases signalling a value assignment
+#   UNDO_TRIGGERS    chr  — phrases triggering the undo action
+#   BOOL_ON / BOOL_OFF chr — phrases meaning true / false for checkbox params
+#
+# Undo stack functions:
+#   snapshot_inputs(input)        — captures current widget state as a list
+#   push_history(rv, snapshot)    — pushes snapshot onto rv$patch_history (max 10)
+#   restore_last(rv, session)     — pops and restores the most recent snapshot
+#
+# Utility:
+#   format_intent_summary(intent) — human-readable "field → value | ..." string
 #
 # Architecture:
 #   parse_intent(user_text, chart_id, api_key, model)

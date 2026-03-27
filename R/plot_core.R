@@ -1,5 +1,44 @@
-# R/plot_core.R
-# Shared plotting core used by per-chart inlined plot_fn implementations.
+# =============================================================================
+# File   : R/plot_core.R
+# Purpose: Shared plotting primitives used by every chart's plot_fn.
+#          Provides colour palettes, ggplot2 themes, axis-limit helpers, and
+#          the top-level generate_plot() dispatcher.
+#
+# Globals exported to the app environment:
+#   COLOR_PALETTES  named list of hex-colour vectors (length 7 each)
+#   CHART_THEMES    named list of ggplot2 theme functions
+#
+# Functions:
+#   get_palette(name, n)
+#     Returns n colours from the named palette, interpolated if n > 7.
+#     Parameters: name [chr] palette name; n [int] number of colours needed.
+#
+#   safe_limits(min_v, max_v)
+#     Validates a numeric range and returns c(min, max) or NULL if invalid.
+#     Parameters: min_v, max_v [num | chr] — coerced to numeric internally.
+#
+#   apply_axis_limits(p, options)
+#     Appends coord_cartesian() to p when manual range mode is active.
+#     Parameters: p [ggplot]; options [list] with x/y_range_mode, x/y_min/max.
+#
+#   apply_theme(p, options)
+#     Applies axis limits, selected theme function, and labs() to the plot.
+#     Parameters: p [ggplot]; options [list] with theme, title, x_label, y_label.
+#
+#   has_col(data, col)
+#     Returns TRUE if col exists in data and is not all-NA.
+#     Parameters: data [data.frame]; col [chr] column name.
+#
+#   .bar_orient(p, orient)
+#     Conditionally flips coordinates for horizontal bar charts.
+#
+#   .bar_label_params(orient)
+#     Returns list(vjust, hjust) appropriate for the bar orientation.
+#
+#   generate_plot(chart_id, data, options)
+#     Dispatches to CHARTS[[chart_id]]$plot_fn(data, options).
+#     Parameters: chart_id [chr]; data [data.frame]; options [list].
+# =============================================================================
 
 COLOR_PALETTES <- list(
   "\u9ed8\u8ba4"   = c("#4ECDC4", "#FF6B6B", "#45B7D1", "#FFA07A", "#98D8C8", "#F7DC6F", "#C3A6FF"),

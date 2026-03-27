@@ -1,5 +1,42 @@
-# R/modules/mod_settings.R
-# Settings-side server logic: show_when, presets, settings modal, scene templates.
+# =============================================================================
+# File   : R/modules/mod_settings.R
+# Purpose: Settings server module — manages show_when conditional visibility,
+#          user preset save/load/delete, the API configuration modal, dynamic
+#          model selector, chart-specific option rendering, and scene template
+#          card wiring for bar and scatter chart families.
+#
+# Depends: R/ui_helpers.R      (build_show_when_map, apply_show_when,
+#                                build_controls, collect_options)
+#          R/preset_manager.R  (list_preset_names, load_presets, save_preset,
+#                                delete_preset, restore_preset_inputs)
+#          R/config_manager.R  (LLM_PROVIDERS, save_api_config, get_api_url)
+#          R/plot_core.R       (COLOR_PALETTES, CHART_THEMES)
+#          R/bar_scene_presets.R    (BAR_SCENE_PRESETS)
+#          R/scatter_scene_presets.R (SCATTER_SCENE_PRESETS)
+#          R/utils/logger.R    (log_debug, log_info, safe_run)
+#
+# Exported functions:
+#   init_mod_settings(input, output, session, rv)
+#     Parameters:
+#       input   [Shiny input]
+#       output  [Shiny output]
+#       session [Shiny session]
+#       rv      [reactiveValues]  reads rv$api_config, no writes except via modal
+#
+# Key observers / outputs:
+#   observeEvent(input$chart_type_select) — show_when + preset list refresh
+#   observeEvent(input$preset_load_btn)   — restore preset to inputs
+#   observeEvent(input$preset_save_btn)   — open save name modal
+#   observeEvent(input$preset_delete_btn) — open delete confirm modal
+#   observeEvent(input$settings_btn)      — open API config modal
+#   observeEvent(input$api_save_btn)      — persist config + update rv
+#   output$api_model_ui                   — dynamic model selector inside modal
+#   output$chart_opts_ui                  — chart-specific option controls
+#   output$bar_scene_ui                   — bar family scene template cards
+#   output$scatter_scene_ui               — scatter family scene template cards
+# =============================================================================
+
+MODULE <- "mod_settings"
 
 init_mod_settings <- function(input, output, session, rv) {
 

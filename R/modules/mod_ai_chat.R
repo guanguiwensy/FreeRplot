@@ -1,5 +1,42 @@
-# R/modules/mod_ai_chat.R
-# AI chat server logic (Kimi): messaging, suggestion card, and chat rendering.
+# =============================================================================
+# File   : R/modules/mod_ai_chat.R
+# Purpose: AI chat server module — handles user messages, routes through the
+#          intent engine (local then LLM), manages the suggestion card,
+#          renders chat bubbles, and owns the undo stack interaction.
+#          All AI API calls go through chat_with_llm() in R/kimi_api.R.
+#
+# Depends: R/core/intent_engine.R  (parse_intent, snapshot_inputs, push_history,
+#                                    restore_last, format_intent_summary)
+#          R/kimi_api.R             (chat_with_llm)
+#          R/utils/logger.R         (log_debug, log_info, log_error, safe_run)
+#
+# Exported functions:
+#   init_mod_ai_chat(input, output, session, rv)
+#     Registers all observers and output renderers for the chat panel.
+#     Parameters:
+#       input   [Shiny input]          reactive input bindings
+#       output  [Shiny output]         output binding list
+#       session [Shiny session]        current session object
+#       rv      [reactiveValues]       shared app state (messages, suggestion,
+#                                      pending_intent, patch_history, api_config)
+#
+# Internal helpers (not exported):
+#   summarize_data_for_ai(data, max_cols, max_levels) -> chr
+#   build_ai_context_prompt(data, chart_id) -> chr
+#   extract_expected_semantics(chart) -> chr[]
+#   coerce_bool(x) -> lgl
+#   run_generate() — triggers generate_btn click via shinyjs delay
+#   apply_column_mapping(chart_id, mapping) -> list(changed, applied)
+#   apply_common_patch(patch) -> chr[]   field names that were updated
+#   apply_chart_option_patch(chart_id, patch) -> chr[]
+#   format_apply_summary(map, common, chart) -> chr
+#   apply_recommendation(rec, auto) -> lgl
+#   extract_local_patch(user_text, chart_id) -> list | NULL
+#   get_pick_rec() -> recommendation list | NULL
+#   apply_intent(intent, chart_id) -> chr   reply text
+# =============================================================================
+
+MODULE <- "mod_ai_chat"
 
 init_mod_ai_chat <- function(input, output, session, rv) {
 
@@ -375,6 +412,8 @@ init_mod_ai_chat <- function(input, output, session, rv) {
     user_text <- trimws(input$user_input)
     req(nchar(user_text) > 0)
 
+    log_debug(MODULE, "send_btn: user_text='%s'", user_text)
+
     rv$messages <- c(rv$messages, list(list(role = "user", content = user_text)))
     updateTextAreaInput(session, "user_input", value = "")
     rv$pending_intent <- NULL   # dismiss any pending preview on new message
@@ -386,7 +425,11 @@ init_mod_ai_chat <- function(input, output, session, rv) {
     api_url   <- get_api_url(cfg)
 
     # ── Step 1: intent engine (local first, then LLM) ──────────────────────
-    intent <- parse_intent(user_text, chart_id, api_key, model, api_url)
+    intent <- safe_run(MODULE, parse_intent(user_text, chart_id, api_key, model, api_url))
+    log_debug(MODULE, "intent: type=%s confidence=%s hits=%d",
+              intent$intent_type %||% "NULL",
+              intent$confidence  %||% "NULL",
+              length(intent$hits %||% character(0)))
 
     # ── Step 2: dispatch by intent type and confidence ─────────────────────
     if (!is.null(intent)) {
