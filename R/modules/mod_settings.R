@@ -151,27 +151,97 @@ init_mod_settings <- function(input, output, session, rv) {
 
   # API settings modal
   observeEvent(input$settings_btn, {
+    cfg      <- isolate(rv$api_config)
+    provider <- cfg$provider %||% "kimi"
+    pinfo    <- LLM_PROVIDERS[[provider]] %||% LLM_PROVIDERS$kimi
+    models   <- if (length(pinfo$models) > 0) pinfo$models else "custom-model"
+
+    provider_choices <- setNames(names(LLM_PROVIDERS), vapply(LLM_PROVIDERS, `[[`, character(1), "name"))
+
     showModal(modalDialog(
-      title = "API Settings",
-      size = "m",
+      title = "AI 接口设置",
+      size  = "m",
       easyClose = TRUE,
-      footer = modalButton("Close"),
-      passwordInput("api_key", "Kimi API Key", placeholder = "sk-...", width = "100%"),
-      selectInput(
-        "kimi_model", "Model",
-        choices = c("moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"),
-        selected = "moonshot-v1-8k"
+      footer = tagList(
+        modalButton("取消"),
+        actionButton("api_save_btn", "保存并关闭", class = "btn btn-primary btn-sm",
+                     icon = icon("floppy-disk"))
       ),
+
+      # Provider select
+      selectInput("api_provider_select", "服务商",
+                  choices  = provider_choices,
+                  selected = provider,
+                  width    = "100%"),
+
+      # Custom URL (only shown for "custom")
+      conditionalPanel(
+        condition = "input.api_provider_select === 'custom'",
+        textInput("api_custom_url", "API URL (OpenAI 兼容)",
+                  value       = cfg$custom_url %||% "",
+                  placeholder = "https://your-proxy.com/v1/chat/completions",
+                  width       = "100%")
+      ),
+
+      # API Key
+      passwordInput("api_key_input", "API Key",
+                    value       = cfg$api_key %||% "",
+                    placeholder = pinfo$placeholder %||% "sk-...",
+                    width       = "100%"),
+
+      # Model
+      uiOutput("api_model_ui"),
+
       tags$hr(),
       tags$small(
         class = "text-muted",
-        "API Key is used locally to call Kimi API and is not persisted elsewhere.",
-        tags$br(),
-        "Visit ",
-        tags$a(href = "https://platform.moonshot.cn", target = "_blank", "platform.moonshot.cn"),
-        " to get your key."
+        icon("circle-info"), " API Key 仅在本地使用，",
+        tags$strong("保存后写入 ~/.r-plot-ai/api_config.json"),
+        "，重启应用自动读取，无需重复输入。"
       )
     ))
+  })
+
+  # Dynamic model selector inside modal
+  output$api_model_ui <- renderUI({
+    provider <- input$api_provider_select %||% isolate(rv$api_config$provider) %||% "kimi"
+    pinfo    <- LLM_PROVIDERS[[provider]] %||% LLM_PROVIDERS$kimi
+    current  <- isolate(rv$api_config$model) %||% ""
+
+    if (identical(provider, "custom") || length(pinfo$models) == 0) {
+      textInput("api_model_input", "模型名称",
+                value       = current,
+                placeholder = "model-name",
+                width       = "100%")
+    } else {
+      sel <- if (current %in% pinfo$models) current else pinfo$models[1]
+      selectInput("api_model_input", "模型",
+                  choices  = pinfo$models,
+                  selected = sel,
+                  width    = "100%")
+    }
+  })
+
+  # Save config to disk + update rv
+  observeEvent(input$api_save_btn, {
+    provider   <- input$api_provider_select %||% "kimi"
+    api_key    <- trimws(input$api_key_input %||% "")
+    model      <- trimws(input$api_model_input %||% "")
+    custom_url <- trimws(input$api_custom_url %||% "")
+
+    if (!nzchar(api_key)) {
+      showNotification("API Key 不能为空。", type = "warning", duration = 3)
+      return()
+    }
+
+    cfg <- list(provider = provider, api_key = api_key, model = model, custom_url = custom_url)
+    save_api_config(cfg)
+    rv$api_config <- cfg
+    removeModal()
+    showNotification(
+      tags$span(icon("check"), " API 配置已保存，重启后自动生效。"),
+      type = "message", duration = 3
+    )
   })
 
   # Dynamic chart-specific options panel

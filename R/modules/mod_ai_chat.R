@@ -380,11 +380,13 @@ init_mod_ai_chat <- function(input, output, session, rv) {
     rv$pending_intent <- NULL   # dismiss any pending preview on new message
 
     chart_id  <- isolate(input$chart_type_select)
-    api_key   <- isolate(input$api_key)
-    model     <- isolate(input$kimi_model) %||% "moonshot-v1-8k"
+    cfg       <- isolate(rv$api_config)
+    api_key   <- cfg$api_key   %||% ""
+    model     <- cfg$model     %||% "moonshot-v1-8k"
+    api_url   <- get_api_url(cfg)
 
     # ── Step 1: intent engine (local first, then LLM) ──────────────────────
-    intent <- parse_intent(user_text, chart_id, api_key, model)
+    intent <- parse_intent(user_text, chart_id, api_key, model, api_url)
 
     # ── Step 2: dispatch by intent type and confidence ─────────────────────
     if (!is.null(intent)) {
@@ -444,10 +446,11 @@ init_mod_ai_chat <- function(input, output, session, rv) {
     )
 
     result <- withProgress(message = "AI 思考中…", value = 0.5, {
-      chat_with_kimi(
+      chat_with_llm(
         messages = c(rv$messages, list(ctx_msg)),
         api_key  = api_key,
-        model    = model
+        model    = model,
+        api_url  = api_url
       )
     })
 

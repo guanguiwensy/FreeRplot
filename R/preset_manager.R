@@ -17,7 +17,8 @@
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 preset_dir <- function() {
-  d <- file.path(getwd(), "presets")
+  root <- if (exists("APP_DIR", envir = globalenv())) get("APP_DIR", envir = globalenv()) else getwd()
+  d <- file.path(root, "presets")
   if (!dir.exists(d)) dir.create(d, recursive = TRUE)
   d
 }

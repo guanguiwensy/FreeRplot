@@ -1,7 +1,7 @@
 # R/kimi_api.R
-# Kimi (Moonshot AI) API integration - OpenAI-compatible format.
+# LLM API integration — OpenAI-compatible format, multi-provider.
 
-KIMI_API_URL <- "https://api.moonshot.cn/v1/chat/completions"
+KIMI_API_URL <- "https://api.moonshot.cn/v1/chat/completions"  # kept for backward compat
 
 normalize_recommendation_item <- function(item) {
   chart_id <- item$chart_id %||% item$recommended_chart
@@ -68,51 +68,47 @@ normalize_suggestion_payload <- function(parsed) {
   )
 }
 
-# Send conversation to Kimi and return response
-chat_with_kimi <- function(messages, api_key, model = "moonshot-v1-8k") {
+# Generic LLM call (OpenAI-compatible format, works for all supported providers)
+chat_with_llm <- function(messages, api_key, model, api_url = KIMI_API_URL) {
   if (is.null(api_key) || nchar(trimws(api_key)) == 0) {
-    return(list(
-      success = FALSE,
-      content = "Please configure Kimi API Key in settings first.",
-      suggestion = NULL
-    ))
+    return(list(success = FALSE, content = "请先在设置中配置 API Key。", suggestion = NULL))
+  }
+  if (is.null(api_url) || nchar(trimws(api_url)) == 0) {
+    return(list(success = FALSE, content = "API URL 未配置，请在设置中检查。", suggestion = NULL))
   }
 
   tryCatch({
-    resp <- httr2::request(KIMI_API_URL) |>
+    resp <- httr2::request(api_url) |>
       httr2::req_headers(
         Authorization = paste("Bearer", trimws(api_key)),
         `Content-Type` = "application/json"
       ) |>
       httr2::req_body_json(list(
-        model = model,
-        messages = messages,
+        model       = model,
+        messages    = messages,
         temperature = 0.2,
-        max_tokens = 1800
+        max_tokens  = 1800
       )) |>
       httr2::req_timeout(60) |>
       httr2::req_perform()
 
-    data <- httr2::resp_body_json(resp)
+    data    <- httr2::resp_body_json(resp)
     content <- data$choices[[1]]$message$content
 
-    list(
-      success = TRUE,
-      content = content,
-      suggestion = parse_chart_suggestion(content)
-    )
+    list(success = TRUE, content = content, suggestion = parse_chart_suggestion(content))
   }, error = function(e) {
     msg <- conditionMessage(e)
-    if (grepl("401", msg)) msg <- "Invalid API key."
-    else if (grepl("429", msg)) msg <- "Rate limit exceeded. Please retry later."
-    else if (grepl("timeout|timed out", msg, ignore.case = TRUE)) msg <- "Request timed out."
+    if      (grepl("401", msg))                            msg <- "API Key 无效，请检查配置。"
+    else if (grepl("429", msg))                            msg <- "请求频率超限，请稍后重试。"
+    else if (grepl("timeout|timed out", msg, ignore.case = TRUE)) msg <- "请求超时，请检查网络。"
 
-    list(
-      success = FALSE,
-      content = paste("API call failed:", msg),
-      suggestion = NULL
-    )
+    list(success = FALSE, content = paste("API 调用失败:", msg), suggestion = NULL)
   })
+}
+
+# Backward-compatible wrapper
+chat_with_kimi <- function(messages, api_key, model = "moonshot-v1-8k") {
+  chat_with_llm(messages, api_key, model, api_url = KIMI_API_URL)
 }
 
 # Extract structured suggestion JSON from model response text

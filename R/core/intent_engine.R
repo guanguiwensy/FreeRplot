@@ -368,20 +368,22 @@ extract_intent_local <- function(user_text, chart_id) {
   )
 }
 
-extract_intent_llm <- function(user_text, chart_id, api_key, model = "moonshot-v1-8k") {
+extract_intent_llm <- function(user_text, chart_id, api_key, model = "moonshot-v1-8k",
+                               api_url = KIMI_API_URL) {
   if (is.null(api_key) || !nzchar(trimws(api_key))) return(NULL)
 
   defs    <- CHARTS[[chart_id]]$options_def %||% list()
   sys_msg <- .build_intent_prompt(chart_id, defs)
 
   result  <- tryCatch(
-    chat_with_kimi(
+    chat_with_llm(
       messages = list(
         list(role = "system",  content = sys_msg),
         list(role = "user",    content = user_text)
       ),
       api_key = api_key,
-      model   = model
+      model   = model,
+      api_url = api_url
     ),
     error = function(e) NULL
   )
@@ -431,7 +433,8 @@ extract_intent_llm <- function(user_text, chart_id, api_key, model = "moonshot-v
 # 3. Else try LLM with focused intent prompt
 # 4. Merge: LLM wins on discovered fields, local wins on high-confidence fields
 
-parse_intent <- function(user_text, chart_id, api_key = NULL, model = "moonshot-v1-8k") {
+parse_intent <- function(user_text, chart_id, api_key = NULL, model = "moonshot-v1-8k",
+                         api_url = KIMI_API_URL) {
   # Local fast path
   local_result <- extract_intent_local(user_text, chart_id)
 
@@ -446,7 +449,7 @@ parse_intent <- function(user_text, chart_id, api_key = NULL, model = "moonshot-
   }
 
   # Fall back to LLM
-  llm_result <- extract_intent_llm(user_text, chart_id, api_key, model)
+  llm_result <- extract_intent_llm(user_text, chart_id, api_key, model, api_url)
 
   if (!is.null(llm_result)) return(llm_result)
 

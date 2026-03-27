@@ -13,6 +13,8 @@ server <- function(input, output, session) {
     current_data    = CHARTS[["scatter_basic"]]$sample_data,
     suggestion      = NULL,
     current_plot    = NULL,
+    # Persisted API config (loaded from ~/.r-plot-ai/api_config.json at startup)
+    api_config      = load_api_config(),
     # Intent engine state
     pending_intent  = NULL,   # medium-confidence intent awaiting user confirmation
     patch_history   = list()  # stack of input snapshots for undo (max 10)

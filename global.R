@@ -1,4 +1,15 @@
 # global.R — loaded once before app starts
+# APP_DIR is pinned here so all modules use a stable root regardless of CWD.
+APP_DIR <- normalizePath(
+  if (nzchar(Sys.getenv("SHINY_APP_DIR"))) {
+    Sys.getenv("SHINY_APP_DIR")
+  } else if (file.exists("global.R")) {
+    getwd()
+  } else {
+    tryCatch(dirname(sys.frame(1)$ofile), error = function(e) getwd())
+  },
+  mustWork = FALSE
+)
 
 # ── Packages ─────────────────────────────────────────────────────────────────
 suppressPackageStartupMessages({
@@ -20,6 +31,7 @@ suppressPackageStartupMessages({
 })
 
 # ── Source modules ────────────────────────────────────────────────────────────
+source("R/config_manager.R")      # LLM_PROVIDERS, load_api_config(), save_api_config(), get_api_url()
 source("R/ui_helpers.R")          # build_controls(), collect_options(), get_default_options()
 source("R/core/intent_engine.R") # parse_intent(), snapshot_inputs(), push_history(), restore_last()
 source("R/chart_registry.R")      # CHARTS list (plot_fn stored as closures, order-safe)

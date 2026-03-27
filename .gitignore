@@ -1,0 +1,18 @@
+# R / RStudio
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# 用户数据（不同开发者各自维护）
+presets/
+
+# API 配置（包含密钥，绝不入库）
+# 注意：实际配置存在 ~/.r-plot-ai/api_config.json（项目目录外），已天然隔离
+# 若未来在项目内新增配置文件，在此处排除：
+*.env
+config/secrets.*
+
+# 系统文件
+.DS_Store
+Thumbs.db
