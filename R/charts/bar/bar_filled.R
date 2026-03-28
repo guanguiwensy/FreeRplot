@@ -25,7 +25,9 @@ chart_def <- list(id = "bar_filled", name = "百分比堆叠柱状图", name_en 
         df <- df[!is.na(df$y), ]
         df$pct <- ave(df$y, df$x, FUN = function(v) v/sum(v))
         n_grp <- length(unique(df$group))
-        pal <- get_palette(pal_name, n_grp)
+        group_levels <- unique(df$group)
+        pal <- palette_values_for_column(df, "group", options, 
+            levels = group_levels, palette_name = pal_name)
         p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, fill = group)) + 
             ggplot2::geom_col(position = "fill", width = bw, 
                 alpha = alp, color = NA) + ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1)) + 

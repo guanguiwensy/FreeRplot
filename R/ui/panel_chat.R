@@ -12,6 +12,7 @@
 
 chat_panel_ui <- function() {
   card(
+    class = "chat-card pane-card",
     style = "height: 100%; display: flex; flex-direction: column; overflow: hidden;",
 
     card_header(
@@ -28,7 +29,7 @@ chat_panel_ui <- function() {
       id    = "chat-container",
       style = paste0(
         "flex: 1 1 auto; overflow-y: auto; padding: 12px; ",
-        "background: #f8f9fa; margin: 0 4px 4px;"
+        "background: #f8f9fa; margin: 0 4px 4px; min-height: 0;"
       ),
       uiOutput("chat_messages_ui")
     ),

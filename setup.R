@@ -19,7 +19,8 @@ required <- c(
   "ggDNAvis",
   "circlize",
   "colourpicker",
-  "shinyjs"
+  "shinyjs",
+  "readxl"
 )
 
 installed  <- rownames(installed.packages())

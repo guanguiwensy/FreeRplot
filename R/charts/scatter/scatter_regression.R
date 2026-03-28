@@ -32,6 +32,8 @@ chart_def <- list(
     p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y))
 
     if (!is.null(g_col) && fit_by_group) {
+      group_levels <- unique(as.character(df$group))
+      pal <- palette_values_for_column(df, "group", options, levels = group_levels, palette_name = options$palette)
       p <- p +
         ggplot2::geom_point(ggplot2::aes(color = factor(group)), size = point_size, alpha = alpha) +
         ggplot2::geom_smooth(
@@ -41,6 +43,8 @@ chart_def <- list(
         ggplot2::scale_color_manual(values = pal, name = g_col)
     } else {
       if (!is.null(g_col)) {
+        group_levels <- unique(as.character(df$group))
+        pal <- palette_values_for_column(df, "group", options, levels = group_levels, palette_name = options$palette)
         p <- p +
           ggplot2::geom_point(ggplot2::aes(color = factor(group)), size = point_size, alpha = alpha) +
           ggplot2::scale_color_manual(values = pal, name = g_col)

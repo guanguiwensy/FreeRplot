@@ -3,7 +3,9 @@
 chart_def <- list(id = "pie", name = "饼图", category = "通用图表", 
     name_en = "Pie Chart", plot_fn = function (data, options) 
     {
-        pal <- get_palette(options$palette, nrow(data))
+        label_levels <- unique(as.character(data$label))
+        pal <- palette_values_for_column(data, "label", options, 
+            levels = label_levels, palette_name = options$palette)
         label_type <- as.character(options$label_type %||% "percent")
         donut_ratio <- as.numeric(options$donut_ratio %||% 0)
         label_size <- as.numeric(options$label_size %||% 5)

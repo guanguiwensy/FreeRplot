@@ -14,5 +14,5 @@
 # =============================================================================
 
 tab_gallery_ui <- function() {
-  div(class = "p-3", uiOutput("chart_gallery_ui"))
+  div(class = "tab-pane-shell gallery-pane-shell p-3", uiOutput("chart_gallery_ui"))
 }

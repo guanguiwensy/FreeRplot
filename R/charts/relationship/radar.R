@@ -7,7 +7,9 @@ chart_def <- list(id = "radar", name = "雷达图", category = "通用图表",
         group_col <- names(data)[1]
         axes <- names(data)[-1]
         n_axes <- length(axes)
-        pal <- get_palette(options$palette, nrow(data))
+        group_levels <- unique(as.character(data$group))
+        pal <- palette_values_for_column(data, "group", options, 
+            levels = group_levels, palette_name = options$palette)
         fill_alpha <- as.numeric(options$fill_alpha %||% 0.3)
         line_width <- as.numeric(options$line_width %||% 1)
         axis_manual <- isTRUE(options$axis_manual)

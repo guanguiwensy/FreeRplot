@@ -12,7 +12,10 @@
 
 plot_preview_card_ui <- function() {
   card(
+    class = "plot-preview-card pane-card",
+    style = "height: 100%; display: flex; flex-direction: column; min-height: 0;",
     card_header(
+      style = "flex-shrink: 0;",
       div(
         class = "d-flex align-items-center gap-2 flex-wrap",
         span("Chart Preview"),
@@ -40,10 +43,13 @@ plot_preview_card_ui <- function() {
       )
     ),
 
-    shinycssloaders::withSpinner(
-      plotOutput("main_plot", height = "auto"),
-      color = "#2c7be5",
-      type  = 6
+    div(
+      class = "plot-stage",
+      shinycssloaders::withSpinner(
+        plotOutput("main_plot", height = "100%", width = "100%"),
+        color = "#2c7be5",
+        type  = 6
+      )
     )
   )
 }

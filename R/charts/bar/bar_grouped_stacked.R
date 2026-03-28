@@ -30,7 +30,9 @@ chart_def <- list(id = "bar_grouped_stacked", name = "分组堆叠柱状图",
             as.character(data[[fac_col]])
         else df$x
         df <- df[!is.na(df$y), ]
-        pal <- get_palette(pal_name, length(unique(df$sub)))
+        sub_levels <- unique(df$sub)
+        pal <- palette_values_for_column(df, "sub", options, 
+            levels = sub_levels, palette_name = pal_name)
         p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, fill = sub)) + 
             ggplot2::geom_col(position = "stack", width = bw, 
                 alpha = alp, color = NA) + ggplot2::scale_fill_manual(values = pal, 

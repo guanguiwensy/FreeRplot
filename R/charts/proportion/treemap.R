@@ -3,7 +3,11 @@
 chart_def <- list(id = "treemap", name = "树状图", category = "通用图表", 
     name_en = "Treemap", plot_fn = function (data, options) 
     {
-        pal <- get_palette(options$palette, length(unique(data$label)))
+        target_col <- if ("parent" %in% names(data) && any(nchar(data$parent) > 
+            0)) "parent" else "label"
+        target_levels <- unique(as.character(data[[target_col]]))
+        pal <- palette_values_for_column(data, target_col, options, 
+            levels = target_levels, palette_name = options$palette)
         border_width <- as.numeric(options$border_width %||% 
             1.5)
         label_size <- as.numeric(options$label_size %||% 11)

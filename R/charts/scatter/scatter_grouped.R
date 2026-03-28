@@ -27,8 +27,8 @@ chart_def <- list(
     show_ellipse  <- isTRUE(options$show_ellipse)
     show_centroid <- isTRUE(options$show_centroid)
 
-    n_grp <- max(1, length(unique(df$group)))
-    pal <- get_palette(options$palette, n_grp)
+    group_levels <- unique(as.character(df$group))
+    pal <- palette_values_for_column(df, "group", options, levels = group_levels, palette_name = options$palette)
 
     aes_base <- ggplot2::aes(x = x, y = y, color = factor(group))
     if (shape_by_grp) aes_base$shape <- as.name("factor(group)")

@@ -1,37 +1,33 @@
 # =============================================================================
 # File   : ui.R
-# Purpose: Top-level UI definition.  Assembles sub-panel functions sourced
+# Purpose: Top-level UI definition. Assembles sub-panel functions sourced
 #          from R/ui/ into the final page layout.
-#          All panel content is defined in dedicated files; this file owns
-#          only the page theme, global <head> tags, header bar, and the
-#          two-column layout wrapper.
+#          This version uses a two-level resizable IDE-style workspace:
+#          chat vs workspace, then preview vs tabbed workbench.
 #
 # Layout :
 #   page_fillable
-#     ├── <head>  JS helpers (Enter-to-send, scrollChat, copyRCode)
-#     ├── .app-header  (logo + title + settings button)
-#     └── layout_columns  col_widths = c(5, 7)
-#           ├── [col 5]  chat_panel_ui()           → R/ui/panel_chat.R
-#           └── [col 7]  tabsetPanel
-#                 ├── plot_preview_card_ui()        → R/ui/panel_plot.R
-#                 └── card  "Data & Settings"
-#                       tabPanel "Data"             → tab_data_ui()
-#                       tabPanel "Settings"         → tab_settings_ui()
-#                       tabPanel "R Code"           → tab_code_ui()
-#                       tabPanel "Chart Library"    → tab_gallery_ui()
+#     ├── <head>  JS helpers + resizable panes script
+#     ├── .app-header
+#     └── #app-shell
+#           ├── #pane-left            -> chat_panel_ui()
+#           ├── #main-resizer         -> vertical drag handle
+#           └── #workspace-shell
+#                 ├── #pane-right-top    -> plot_preview_card_ui()
+#                 ├── #workspace-resizer -> horizontal drag handle
+#                 └── #pane-right-bottom -> tabbed workbench card
 #
 # Sub-panel sources (loaded in global.R before this file is evaluated):
-#   R/ui/panel_chat.R      panel_chat.R
-#   R/ui/panel_plot.R      panel_plot.R
-#   R/ui/panel_data.R      panel_data.R
-#   R/ui/panel_settings.R  panel_settings.R
-#   R/ui/panel_code.R      panel_code.R
-#   R/ui/panel_gallery.R   panel_gallery.R
+#   R/ui/panel_chat.R
+#   R/ui/panel_plot.R
+#   R/ui/panel_data.R
+#   R/ui/panel_settings.R
+#   R/ui/panel_code.R
+#   R/ui/panel_gallery.R
 # =============================================================================
 
 ui <- page_fillable(
 
-  # ── Page theme ─────────────────────────────────────────────────────────────
   theme = bs_theme(
     bootswatch = "flatly",
     primary    = "#2c7be5",
@@ -39,10 +35,10 @@ ui <- page_fillable(
   ),
   title = "R Intelligent Chart Assistant",
 
-  # ── Global <head>: shinyjs + styles + JS helpers ──────────────────────────
   tags$head(
     shinyjs::useShinyjs(),
     tags$link(rel = "stylesheet", href = "styles.css"),
+    tags$script(src = "panes.js"),
     tags$script(HTML("
       // Send on Enter (Shift+Enter = newline)
       $(document).on('keydown', '#user_input', function(e) {
@@ -58,60 +54,153 @@ ui <- page_fillable(
         if (c) c.scrollTop = c.scrollHeight;
       });
 
+      function setCopyCodeButtonState(state) {
+        var btn = document.getElementById('copy_code_btn');
+        if (!btn) return;
+
+        var defaultLabel = btn.getAttribute('data-default-label') || '复制代码';
+        var successLabel = btn.getAttribute('data-success-label') || '已复制';
+        var failedLabel = btn.getAttribute('data-failed-label') || '复制失败';
+
+        if (state === 'success') {
+          btn.innerText = successLabel;
+          btn.classList.add('is-copied');
+          btn.classList.remove('is-failed');
+        } else if (state === 'failed') {
+          btn.innerText = failedLabel;
+          btn.classList.add('is-failed');
+          btn.classList.remove('is-copied');
+        } else {
+          btn.innerText = defaultLabel;
+          btn.classList.remove('is-copied');
+          btn.classList.remove('is-failed');
+        }
+      }
+
+      function getRCodeText() {
+        var store = document.getElementById('r_code_copy_store');
+        if (store && typeof store.value === 'string') {
+          return (store.value || '').trim();
+        }
+
+        var host = document.querySelector('.code-raw-store #r_code_output');
+        if (!host) return '';
+        return (host.textContent || '').trim();
+      }
+
+      function fallbackCopyText(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+
+        try {
+          return document.execCommand('copy');
+        } finally {
+          document.body.removeChild(ta);
+        }
+      }
+
       // Copy R code to clipboard
       function copyRCode() {
-        var pre = document.getElementById('r_code_output');
-        if (!pre) return;
-        var text = pre.innerText || pre.textContent;
-        navigator.clipboard.writeText(text).then(function() {
-          var btn = document.getElementById('copy_code_btn');
-          if (btn) {
-            btn.innerText = 'Copied!';
-            setTimeout(function(){ btn.innerText = 'Copy Code'; }, 2000);
-          }
-        });
+        var text = getRCodeText();
+        if (!text) {
+          setCopyCodeButtonState('failed');
+          setTimeout(function() { setCopyCodeButtonState('default'); }, 1800);
+          return;
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function() {
+            setCopyCodeButtonState('success');
+            setTimeout(function() { setCopyCodeButtonState('default'); }, 1800);
+          }).catch(function() {
+            var ok = fallbackCopyText(text);
+            setCopyCodeButtonState(ok ? 'success' : 'failed');
+            setTimeout(function() { setCopyCodeButtonState('default'); }, 1800);
+          });
+          return;
+        }
+
+        var ok = fallbackCopyText(text);
+        setCopyCodeButtonState(ok ? 'success' : 'failed');
+        setTimeout(function() { setCopyCodeButtonState('default'); }, 1800);
       }
     "))
   ),
 
-  # ── App header bar ─────────────────────────────────────────────────────────
   div(
     class = "app-header",
     span(class = "app-logo", "\U0001f4ca"),
     h4(class = "app-title", "R Intelligent Chart Assistant"),
-    tags$small(style = "color:#8bacd4; margin-left:8px;", "Powered by LLM \u00d7 ggplot2"),
+    tags$small(style = "color:#8bacd4; margin-left:8px;", "Powered by LLM × ggplot2"),
     div(
       style = "margin-left:auto;",
       actionButton("settings_btn", "Settings", class = "btn btn-sm btn-outline-light")
     )
   ),
 
-  # ── Two-column layout ──────────────────────────────────────────────────────
-  layout_columns(
-    col_widths = c(5, 7),
-    style      = "padding: 12px; gap: 12px; height: calc(100vh - 56px); overflow: hidden;",
+  div(
+    id = "app-shell",
+    class = "app-shell",
 
-    # Left column — AI chat panel
-    chat_panel_ui(),
+    div(
+      id = "pane-left",
+      class = "pane-shell pane-left-shell",
+      chat_panel_ui()
+    ),
 
-    # Right column — plot preview + data/settings/code tabs
-    layout_columns(
-      col_widths = 12,
-      style      = "height: 100%; overflow-y: auto; gap: 10px;",
+    div(
+      id = "main-resizer",
+      class = "pane-resizer pane-resizer-x",
+      role = "separator",
+      tabindex = "0",
+      `aria-label` = "Resize chat and workspace panels",
+      `aria-orientation` = "vertical"
+    ),
 
-      # Plot preview card
-      plot_preview_card_ui(),
+    div(
+      id = "workspace-shell",
+      class = "pane-shell pane-right-shell workbench-shell",
 
-      # Data & settings card with tab panels
-      card(
-        card_header("Data & Chart Settings"),
-        tabsetPanel(
-          type = "pills",
-          id   = "data_tabs",
-          tabPanel("Data",          tab_data_ui()),
-          tabPanel("Settings",      tab_settings_ui()),
-          tabPanel("R Code",        tab_code_ui()),
-          tabPanel("Chart Library", tab_gallery_ui())
+      div(
+        id = "pane-right-top",
+        class = "pane-shell pane-right-top-shell",
+        plot_preview_card_ui()
+      ),
+
+      div(
+        id = "workspace-resizer",
+        class = "pane-resizer pane-resizer-y",
+        role = "separator",
+        tabindex = "0",
+        `aria-label` = "Resize preview and workbench panels",
+        `aria-orientation` = "horizontal"
+      ),
+
+      div(
+        id = "pane-right-bottom",
+        class = "pane-shell pane-right-bottom-shell",
+        card(
+          class = "workbench-card",
+          style = "height: 100%; display: flex; flex-direction: column; min-height: 0;",
+          card_header("Data & Chart Settings"),
+          div(
+            class = "workbench-tab-host",
+            tabsetPanel(
+              type = "pills",
+              id   = "data_tabs",
+              tabPanel("Data",          tab_data_ui()),
+              tabPanel("Settings",      tab_settings_ui()),
+              tabPanel("R Code",        tab_code_ui()),
+              tabPanel("Chart Library", tab_gallery_ui())
+            )
+          )
         )
       )
     )

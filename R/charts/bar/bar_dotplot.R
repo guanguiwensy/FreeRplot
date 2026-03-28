@@ -25,7 +25,14 @@ chart_def <- list(id = "bar_dotplot", name = "柱叠加散点图", name_en = "Ba
         n_grp <- if (!is.null(g_col)) 
             length(unique(df$group))
         else 1
-        pal <- get_palette(pal_name, max(n_grp, 1))
+        if ("group" %in% names(df)) {
+            group_levels <- unique(df$group)
+            pal <- palette_values_for_column(df, "group", options, 
+                levels = group_levels, palette_name = pal_name)
+        }
+        else {
+            pal <- get_palette(pal_name, max(n_grp, 1))
+        }
         if (!is.null(g_col) && "group" %in% names(df)) {
             p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, 
                 fill = group, color = group)) + ggplot2::stat_summary(fun = mean, 

@@ -1,139 +1,170 @@
 # =============================================================================
 # File   : R/modules/mod_settings.R
-# Purpose: Settings server module — manages show_when conditional visibility,
-#          user preset save/load/delete, the API configuration modal, dynamic
-#          model selector, chart-specific option rendering, and scene template
-#          card wiring for bar and scatter chart families.
+# Purpose: Settings server module for scene templates, user recipes, dynamic
+#          chart-specific controls, axis-range availability, and the unified
+#          base-palette plus local color-override workflow.
 #
-# Depends: R/ui_helpers.R      (build_show_when_map, apply_show_when,
-#                                build_controls, collect_options)
-#          R/preset_manager.R  (list_preset_names, load_presets, save_preset,
-#                                delete_preset, restore_preset_inputs)
-#          R/config_manager.R  (LLM_PROVIDERS, save_api_config, get_api_url)
-#          R/plot_core.R       (COLOR_PALETTES, CHART_THEMES)
-#          R/bar_scene_presets.R    (BAR_SCENE_PRESETS)
-#          R/scatter_scene_presets.R (SCATTER_SCENE_PRESETS)
-#          R/utils/logger.R    (log_debug, log_info, safe_run)
+# Depends: R/ui_helpers.R       (build_show_when_map, apply_show_when,
+#                                 build_controls, collect_options)
+#          R/preset_manager.R   (list_recipe_records, load_recipe, save_recipe,
+#                                 delete_recipe, restore_recipe_inputs)
+#          R/config_manager.R   (LLM_PROVIDERS, save_api_config, get_api_url)
+#          R/plot_core.R        (COLOR_PALETTES, CHART_THEMES,
+#                                 candidate_palette_columns,
+#                                 infer_palette_target,
+#                                 palette_values_for_levels,
+#                                 palette_override_input_id)
+#          R/bar_scene_presets.R / R/scatter_scene_presets.R
+#          R/utils/logger.R     (log_info, log_warn, safe_run)
 #
 # Exported functions:
 #   init_mod_settings(input, output, session, rv)
-#     Parameters:
-#       input   [Shiny input]
-#       output  [Shiny output]
-#       session [Shiny session]
-#       rv      [reactiveValues]  reads rv$api_config, no writes except via modal
-#
-# Key observers / outputs:
-#   observeEvent(input$chart_type_select) — show_when + preset list refresh
-#   observeEvent(input$preset_load_btn)   — restore preset to inputs
-#   observeEvent(input$preset_save_btn)   — open save name modal
-#   observeEvent(input$preset_delete_btn) — open delete confirm modal
-#   observeEvent(input$settings_btn)      — open API config modal
-#   observeEvent(input$api_save_btn)      — persist config + update rv
-#   output$api_model_ui                   — dynamic model selector inside modal
-#   output$chart_opts_ui                  — chart-specific option controls
-#   output$bar_scene_ui                   — bar family scene template cards
-#   output$scatter_scene_ui               — scatter family scene template cards
 # =============================================================================
 
 MODULE <- "mod_settings"
 
 init_mod_settings <- function(input, output, session, rv) {
 
-  # show_when conditional visibility
-  sw_map <- build_show_when_map(CHARTS)
-  all_sw_triggers <- unique(unlist(lapply(sw_map, names)))
-
-  observeEvent(input$chart_type_select, {
-    cid <- input$chart_type_select
-
-    shinyjs::delay(250, {
-      apply_show_when(sw_map, cid, input)
-    })
-
-    if (identical(cid, "bar_count")) {
-      showNotification(
-        tags$span(icon("circle-info"), "Count mode only needs one category column."),
-        type = "message", duration = 4
-      )
-    }
-
-    if (identical(cid, "bar_errorbar")) {
-      showNotification(
-        tags$span(icon("circle-info"), "Error bar mode suggests mean+sd/se or ymin+ymax columns."),
-        type = "message", duration = 5
-      )
-    }
-  }, ignoreInit = FALSE)
-
-  lapply(all_sw_triggers, function(trigger_id) {
-    observeEvent(input[[trigger_id]], {
-      apply_show_when(sw_map, input$chart_type_select, input)
-    }, ignoreNULL = FALSE, ignoreInit = TRUE)
-  })
-
-  # Preset management
-  refresh_preset_select <- function(chart_id) {
-    nms <- list_preset_names(chart_id)
-    choices <- if (length(nms) == 0) {
-      c("-- No Presets --" = "")
-    } else {
-      c("-- Select Preset --" = "", setNames(nms, nms))
-    }
-    updateSelectInput(session, "preset_select", choices = choices, selected = "")
+  is_probably_numeric <- function(x) {
+    if (is.null(x)) return(FALSE)
+    if (is.numeric(x)) return(TRUE)
+    sx <- suppressWarnings(as.numeric(x))
+    !all(is.na(sx))
   }
 
-  observeEvent(input$chart_type_select, {
-    refresh_preset_select(input$chart_type_select)
-  }, ignoreInit = FALSE)
-
-  observeEvent(input$preset_load_btn, {
-    req(nzchar(input$preset_select))
-
-    chart_id <- input$chart_type_select
-    presets <- load_presets(chart_id)
-    values <- presets[[input$preset_select]]
-
-    if (is.null(values)) {
-      showNotification("Selected preset is missing or corrupted.", type = "warning", duration = 3)
-      return()
-    }
-
-    restore_preset_inputs(CHARTS[[chart_id]], values, session)
-    showNotification(paste0("Preset loaded: ", input$preset_select), type = "message", duration = 2)
+  current_chart <- reactive({
+    CHARTS[[input$chart_type_select]]
   })
 
-  observeEvent(input$preset_save_btn, {
-    existing <- list_preset_names(input$chart_type_select)
-    suggested <- paste0("Preset", length(existing) + 1)
-
-    showModal(modalDialog(
-      title = "Save Current Settings as Preset",
-      size = "s",
-      easyClose = TRUE,
-      footer = tagList(
-        modalButton("Cancel"),
-        actionButton("preset_confirm_save_btn", "Save", class = "btn btn-success btn-sm")
-      ),
-      textInput(
-        "preset_name_input", "Preset Name",
-        value = suggested,
-        width = "100%",
-        placeholder = "Enter preset name"
-      )
-    ))
+  current_defs <- reactive({
+    defs <- current_chart()$options_def %||% list()
+    Filter(function(d) !identical(d$id, "color_palette"), defs)
   })
 
-  observeEvent(input$preset_confirm_save_btn, {
-    name <- trimws(input$preset_name_input %||% "")
-    if (!nzchar(name)) {
-      showNotification("Please enter a preset name.", type = "warning", duration = 3)
-      return()
+  build_recipe_choices <- function() {
+    records <- list_recipe_records(include_legacy = TRUE)
+    if (length(records) == 0) return(c("\u6682\u65e0\u914d\u65b9" = ""))
+
+    labels <- vapply(records, function(rec) {
+      chart_label <- CHARTS[[rec$chart_id]]$name %||% rec$chart_id
+      suffix <- if (identical(rec$source %||% "", "legacy")) "\uff08\u65e7\u7248\uff09" else ""
+      paste0(rec$name, " [", chart_label, "]", suffix)
+    }, character(1))
+
+    setNames(vapply(records, `[[`, character(1), "name"), labels)
+  }
+
+  refresh_recipe_select <- function(selected = "") {
+    choices <- build_recipe_choices()
+    updateSelectInput(session, "recipe_select", choices = choices, selected = selected)
+  }
+
+  toggle_recipe_buttons <- function() {
+    selected <- input$recipe_select %||% ""
+    rec <- if (nzchar(selected)) load_recipe(selected, include_legacy = TRUE) else NULL
+
+    shinyjs::toggleState("recipe_load_btn", condition = !is.null(rec))
+    shinyjs::toggleState(
+      "recipe_delete_btn",
+      condition = !is.null(rec) && !identical(rec$source %||% "", "legacy")
+    )
+  }
+
+  current_axis_state <- reactive({
+    data <- rv$current_data
+    list(
+      x_numeric = if (!is.null(data) && ncol(data) >= 1) is_probably_numeric(data[[1]]) else FALSE,
+      y_numeric = if (!is.null(data) && ncol(data) >= 2) is_probably_numeric(data[[2]]) else FALSE
+    )
+  })
+
+  current_color_columns <- reactive({
+    candidate_palette_columns(rv$current_data)
+  })
+
+  current_color_target <- reactive({
+    if (input$chart_type_select %in% c("bar_value", "bar_horizontal", "bar_count", "bar_diverging")) {
+      return(NULL)
     }
 
+    choices <- current_color_columns()
+    if (length(choices) == 0) return(NULL)
+
+    requested <- input$palette_target_column %||% ""
+    inferred <- infer_palette_target(input$chart_type_select, rv$current_data)
+
+    if (nzchar(requested) && requested %in% choices) return(requested)
+    if (!is.null(inferred) && inferred %in% choices) return(inferred)
+    choices[[1]]
+  })
+
+  current_color_levels <- reactive({
+    target <- current_color_target()
+    if (is.null(target) || !(target %in% names(rv$current_data %||% list()))) return(character(0))
+    unique(as.character(rv$current_data[[target]]))
+  })
+
+  collect_color_overrides <- function(base_palette = input$color_palette %||% names(COLOR_PALETTES)[1],
+                                      target = current_color_target()) {
+    levels <- current_color_levels()
+    if (is.null(target) || length(levels) == 0) return(list())
+
+    defaults <- palette_values_for_levels(levels, base_palette, list())
+    overrides <- list()
+
+    for (level in levels) {
+      iid <- palette_override_input_id(target, level)
+      val <- input[[iid]]
+      if (is.null(val)) next
+      val <- as.character(val)[1]
+      if (!nzchar(val)) next
+      if (!identical(toupper(val), toupper(defaults[[level]]))) {
+        overrides[[level]] <- val
+      }
+    }
+
+    overrides
+  }
+
+  current_color_settings <- reactive({
+    list(
+      base_palette = input$color_palette %||% names(COLOR_PALETTES)[1],
+      target_column = current_color_target(),
+      overrides = collect_color_overrides()
+    )
+  })
+
+  restore_color_settings_inputs <- function(color_settings) {
+    color_settings <- color_settings %||% list()
+    target <- color_settings$target_column %||% current_color_target()
+    if (!is.null(target) && target %in% current_color_columns()) {
+      updateSelectInput(session, "palette_target_column", selected = target)
+    }
+
+    shinyjs::delay(150, {
+      base_palette <- input$color_palette %||% color_settings$base_palette %||% names(COLOR_PALETTES)[1]
+      active_target <- target %||% current_color_target()
+      if (is.null(active_target)) return()
+
+      levels <- unique(as.character(rv$current_data[[active_target]]))
+      defaults <- palette_values_for_levels(levels, base_palette, list())
+      overrides <- color_settings$overrides %||% list()
+
+      for (level in levels) {
+        iid <- palette_override_input_id(active_target, level)
+        val <- overrides[[level]] %||% defaults[[level]]
+        colourpicker::updateColourInput(session, iid, value = val)
+      }
+    })
+  }
+
+  build_current_recipe <- function(name) {
     chart_id <- isolate(input$chart_type_select)
-    values <- c(
-      list(
+    list(
+      version = 1,
+      name = name,
+      chart_id = chart_id,
+      global_settings = list(
         plot_title = isolate(input$plot_title) %||% "",
         x_label = isolate(input$x_label) %||% "",
         y_label = isolate(input$y_label) %||% "",
@@ -149,146 +180,301 @@ init_mod_settings <- function(input, output, session, rv) {
         y_min = isolate(input$y_min),
         y_max = isolate(input$y_max)
       ),
-      collect_options(input)
+      chart_options = collect_options(input, current_defs()),
+      color_settings = current_color_settings()
     )
+  }
 
-    save_preset(chart_id, name, values)
-    removeModal()
-
-    refresh_preset_select(chart_id)
-    updateSelectInput(session, "preset_select", selected = name)
-    showNotification(paste0("Preset saved: ", name), type = "message", duration = 2)
-  })
-
-  observeEvent(input$preset_delete_btn, {
-    req(nzchar(input$preset_select))
-    name <- input$preset_select
-
+  open_save_recipe_modal <- function(default_name) {
     showModal(modalDialog(
-      title = "Confirm Delete",
+      title = "\u4fdd\u5b58\u4e3a\u6211\u7684\u914d\u65b9",
       size = "s",
       easyClose = TRUE,
       footer = tagList(
-        modalButton("Cancel"),
-        actionButton("preset_confirm_delete_btn", "Delete", class = "btn btn-danger btn-sm")
+        modalButton("\u53d6\u6d88"),
+        actionButton("recipe_confirm_save_btn", "\u4fdd\u5b58", class = "btn btn-success btn-sm")
       ),
-      p(paste0("Delete preset [", name, "]? This action cannot be undone."))
-    ))
-  })
-
-  observeEvent(input$preset_confirm_delete_btn, {
-    name <- isolate(input$preset_select)
-    chart_id <- isolate(input$chart_type_select)
-
-    delete_preset(chart_id, name)
-    removeModal()
-    refresh_preset_select(chart_id)
-    showNotification(paste0("Preset deleted: ", name), type = "message", duration = 2)
-  })
-
-  # API settings modal
-  observeEvent(input$settings_btn, {
-    cfg      <- isolate(rv$api_config)
-    provider <- cfg$provider %||% "kimi"
-    pinfo    <- LLM_PROVIDERS[[provider]] %||% LLM_PROVIDERS$kimi
-    models   <- if (length(pinfo$models) > 0) pinfo$models else "custom-model"
-
-    provider_choices <- setNames(names(LLM_PROVIDERS), vapply(LLM_PROVIDERS, `[[`, character(1), "name"))
-
-    showModal(modalDialog(
-      title = "AI 接口设置",
-      size  = "m",
-      easyClose = TRUE,
-      footer = tagList(
-        modalButton("取消"),
-        actionButton("api_save_btn", "保存并关闭", class = "btn btn-primary btn-sm",
-                     icon = icon("floppy-disk"))
+      textInput(
+        "recipe_name_input",
+        "\u914d\u65b9\u540d\u79f0",
+        value = default_name,
+        width = "100%",
+        placeholder = "\u8f93\u5165\u914d\u65b9\u540d\u79f0"
       ),
-
-      # Provider select
-      selectInput("api_provider_select", "服务商",
-                  choices  = provider_choices,
-                  selected = provider,
-                  width    = "100%"),
-
-      # Custom URL (only shown for "custom")
-      conditionalPanel(
-        condition = "input.api_provider_select === 'custom'",
-        textInput("api_custom_url", "API URL (OpenAI 兼容)",
-                  value       = cfg$custom_url %||% "",
-                  placeholder = "https://your-proxy.com/v1/chat/completions",
-                  width       = "100%")
-      ),
-
-      # API Key
-      passwordInput("api_key_input", "API Key",
-                    value       = cfg$api_key %||% "",
-                    placeholder = pinfo$placeholder %||% "sk-...",
-                    width       = "100%"),
-
-      # Model
-      uiOutput("api_model_ui"),
-
-      tags$hr(),
       tags$small(
         class = "text-muted",
-        icon("circle-info"), " API Key 仅在本地使用，",
-        tags$strong("保存后写入 ~/.r-plot-ai/api_config.json"),
-        "，重启应用自动读取，无需重复输入。"
+        "\u914d\u65b9\u4f1a\u8bb0\u5f55\u5f53\u524d\u56fe\u8868\u7c7b\u578b\u3001\u57fa\u7840\u6837\u5f0f\u3001\u989c\u8272\u8bbe\u7f6e\u548c\u4e13\u5c5e\u53c2\u6570\u3002"
       )
     ))
+  }
+
+  show_when_map <- build_show_when_map(CHARTS)
+  all_sw_triggers <- unique(unlist(lapply(show_when_map, names)))
+
+  observeEvent(input$chart_type_select, {
+    cid <- input$chart_type_select
+    shinyjs::delay(200, {
+      apply_show_when(show_when_map, cid, input)
+    })
+    refresh_recipe_select()
+  }, ignoreInit = FALSE)
+
+  lapply(all_sw_triggers, function(trigger_id) {
+    observeEvent(input[[trigger_id]], {
+      apply_show_when(show_when_map, input$chart_type_select, input)
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
   })
 
-  # Dynamic model selector inside modal
-  output$api_model_ui <- renderUI({
-    provider <- input$api_provider_select %||% isolate(rv$api_config$provider) %||% "kimi"
-    pinfo    <- LLM_PROVIDERS[[provider]] %||% LLM_PROVIDERS$kimi
-    current  <- isolate(rv$api_config$model) %||% ""
+  observe({
+    axis_state <- current_axis_state()
 
-    if (identical(provider, "custom") || length(pinfo$models) == 0) {
-      textInput("api_model_input", "模型名称",
-                value       = current,
-                placeholder = "model-name",
-                width       = "100%")
+    if (!isTRUE(axis_state$x_numeric)) {
+      if (!identical(input$x_range_mode %||% "auto", "auto")) {
+        updateSelectInput(session, "x_range_mode", selected = "auto")
+      }
+      shinyjs::disable("x_range_mode")
     } else {
-      sel <- if (current %in% pinfo$models) current else pinfo$models[1]
-      selectInput("api_model_input", "模型",
-                  choices  = pinfo$models,
-                  selected = sel,
-                  width    = "100%")
+      shinyjs::enable("x_range_mode")
+    }
+
+    if (!isTRUE(axis_state$y_numeric)) {
+      if (!identical(input$y_range_mode %||% "auto", "auto")) {
+        updateSelectInput(session, "y_range_mode", selected = "auto")
+      }
+      shinyjs::disable("y_range_mode")
+    } else {
+      shinyjs::enable("y_range_mode")
     }
   })
 
-  # Save config to disk + update rv
-  observeEvent(input$api_save_btn, {
-    provider   <- input$api_provider_select %||% "kimi"
-    api_key    <- trimws(input$api_key_input %||% "")
-    model      <- trimws(input$api_model_input %||% "")
-    custom_url <- trimws(input$api_custom_url %||% "")
+  observe({
+    toggle_recipe_buttons()
+  })
 
-    if (!nzchar(api_key)) {
-      showNotification("API Key 不能为空。", type = "warning", duration = 3)
+  observeEvent(input$recipe_save_btn, {
+    existing <- list_recipe_records(include_legacy = FALSE)
+    suggested <- if (nzchar(input$recipe_select %||% "")) {
+      input$recipe_select
+    } else {
+      paste0("\u914d\u65b9", length(existing) + 1)
+    }
+    open_save_recipe_modal(suggested)
+  })
+
+  observeEvent(input$recipe_confirm_save_btn, {
+    name <- trimws(input$recipe_name_input %||% "")
+    if (!nzchar(name)) {
+      showNotification("\u8bf7\u8f93\u5165\u914d\u65b9\u540d\u79f0\u3002", type = "warning", duration = 3)
       return()
     }
 
-    cfg <- list(provider = provider, api_key = api_key, model = model, custom_url = custom_url)
-    save_api_config(cfg)
-    rv$api_config <- cfg
+    recipe <- build_current_recipe(name)
+    save_recipe(name, recipe)
     removeModal()
+
+    log_info(MODULE, "recipe saved: name=%s chart=%s", name, recipe$chart_id)
+    refresh_recipe_select(selected = name)
     showNotification(
-      tags$span(icon("check"), " API 配置已保存，重启后自动生效。"),
-      type = "message", duration = 3
+      paste0("\u914d\u65b9\u5df2\u4fdd\u5b58\uff1a", name),
+      type = "message",
+      duration = 3
     )
   })
 
-  # Dynamic chart-specific options panel
-  output$chart_opts_ui <- renderUI({
-    chart <- CHARTS[[input$chart_type_select]]
-    defs <- chart$options_def
-    if (is.null(defs)) defs <- list()
+  observeEvent(input$recipe_load_btn, {
+    req(nzchar(input$recipe_select))
+    recipe <- load_recipe(input$recipe_select, include_legacy = TRUE)
 
+    if (is.null(recipe) || !nzchar(recipe$chart_id %||% "")) {
+      log_warn(MODULE, "recipe load failed: missing or invalid record '%s'", input$recipe_select)
+      showNotification("\u9009\u4e2d\u7684\u914d\u65b9\u4e0d\u5b58\u5728\u6216\u5df2\u635f\u574f\u3002", type = "warning", duration = 3)
+      return()
+    }
+
+    if (!(recipe$chart_id %in% names(CHARTS))) {
+      log_warn(MODULE, "recipe load failed: unknown chart_id '%s'", recipe$chart_id)
+      showNotification("\u914d\u65b9\u4e2d\u7684\u56fe\u8868\u7c7b\u578b\u5df2\u4e0d\u53ef\u7528\u3002", type = "warning", duration = 3)
+      return()
+    }
+
+    updateSelectInput(session, "chart_type_select", selected = recipe$chart_id)
+    shinyjs::delay(350, {
+      restore_recipe_inputs(recipe, CHARTS[[recipe$chart_id]], session)
+      restore_color_settings_inputs(recipe$color_settings)
+    })
+
+    log_info(MODULE, "recipe loaded: name=%s chart=%s source=%s",
+             recipe$name, recipe$chart_id, recipe$source %||% "recipe")
+    showNotification(
+      paste0("\u914d\u65b9\u5df2\u52a0\u8f7d\uff1a", recipe$name),
+      type = "message",
+      duration = 3
+    )
+  })
+
+  observeEvent(input$recipe_delete_btn, {
+    req(nzchar(input$recipe_select))
+    recipe <- load_recipe(input$recipe_select, include_legacy = TRUE)
+    req(!is.null(recipe))
+
+    if (identical(recipe$source %||% "", "legacy")) {
+      showNotification(
+        "\u65e7\u7248 preset \u4e3a\u53ea\u8bfb\u6761\u76ee\uff0c\u8bf7\u5148\u53e6\u5b58\u4e3a\u65b0\u914d\u65b9\u540e\u518d\u5220\u9664\u3002",
+        type = "warning",
+        duration = 4
+      )
+      return()
+    }
+
+    showModal(modalDialog(
+      title = "\u786e\u8ba4\u5220\u9664\u914d\u65b9",
+      size = "s",
+      easyClose = TRUE,
+      footer = tagList(
+        modalButton("\u53d6\u6d88"),
+        actionButton("recipe_confirm_delete_btn", "\u5220\u9664", class = "btn btn-danger btn-sm")
+      ),
+      p(paste0("\u5220\u9664\u914d\u65b9 [", recipe$name, "] \uff1f\u8be5\u64cd\u4f5c\u4e0d\u53ef\u64a4\u9500\u3002"))
+    ))
+  })
+
+  observeEvent(input$recipe_confirm_delete_btn, {
+    name <- isolate(input$recipe_select)
+    if (!delete_recipe(name)) {
+      showNotification("\u5220\u9664\u5931\u8d25\uff0c\u672a\u627e\u5230\u5f53\u524d\u914d\u65b9\u3002", type = "warning", duration = 3)
+      return()
+    }
+
+    removeModal()
+    log_info(MODULE, "recipe deleted: name=%s", name)
+    refresh_recipe_select(selected = "")
+    showNotification(paste0("\u914d\u65b9\u5df2\u5220\u9664\uff1a", name), type = "message", duration = 3)
+  })
+
+  output$x_min_ui <- renderUI({
+    if (!identical(input$x_range_mode %||% "auto", "manual")) return(div())
+    numericInput("x_min", "\u0058 \u6700\u5c0f\u503c", value = NA_real_, step = 0.1, width = "100%")
+  })
+
+  output$x_max_ui <- renderUI({
+    if (!identical(input$x_range_mode %||% "auto", "manual")) return(div())
+    numericInput("x_max", "\u0058 \u6700\u5927\u503c", value = NA_real_, step = 0.1, width = "100%")
+  })
+
+  output$y_min_ui <- renderUI({
+    if (!identical(input$y_range_mode %||% "auto", "manual")) return(div())
+    numericInput("y_min", "\u0059 \u6700\u5c0f\u503c", value = NA_real_, step = 0.1, width = "100%")
+  })
+
+  output$y_max_ui <- renderUI({
+    if (!identical(input$y_range_mode %||% "auto", "manual")) return(div())
+    numericInput("y_max", "\u0059 \u6700\u5927\u503c", value = NA_real_, step = 0.1, width = "100%")
+  })
+
+  output$axis_hint_ui <- renderUI({
+    axis_state <- current_axis_state()
+    notes <- character(0)
+
+    if (!isTRUE(axis_state$x_numeric)) {
+      notes <- c(notes, "\u5f53\u524d X \u8f74\u4e0d\u662f\u6570\u503c\u8f74\uff0c\u4e0d\u652f\u6301\u624b\u52a8\u8303\u56f4\u3002")
+    }
+    if (!isTRUE(axis_state$y_numeric)) {
+      notes <- c(notes, "\u5f53\u524d Y \u8f74\u4e0d\u662f\u6570\u503c\u8f74\uff0c\u4e0d\u652f\u6301\u624b\u52a8\u8303\u56f4\u3002")
+    }
+
+    if (length(notes) == 0) return(NULL)
+
+    tags$div(
+      class = "settings-inline-note settings-axis-note",
+      lapply(notes, function(note) tags$div(note))
+    )
+  })
+
+  output$color_settings_ui <- renderUI({
+    chart_id <- input$chart_type_select
+    if (chart_id %in% c("bar_value", "bar_horizontal", "bar_count", "bar_diverging")) {
+      return(tags$p(
+        class = "settings-inline-note",
+        "\u8be5\u56fe\u5f62\u4e3b\u8981\u4f7f\u7528\u5355\u8272\u6216\u6b63\u8d1f\u53cc\u8272\u63a7\u4ef6\uff0c\u4e0d\u663e\u793a\u9010\u503c\u8986\u76d6\u7f16\u8f91\u5668\u3002"
+      ))
+    }
+
+    choices <- current_color_columns()
+    if (length(choices) == 0) {
+      return(tags$p(
+        class = "settings-inline-note",
+        "\u5f53\u524d\u6570\u636e\u4e2d\u6ca1\u6709\u53ef\u7528\u4e8e\u79bb\u6563\u914d\u8272\u7684\u5206\u7c7b\u5b57\u6bb5\u3002"
+      ))
+    }
+
+    target <- current_color_target()
+    levels <- current_color_levels()
+    defaults <- palette_values_for_levels(levels, input$color_palette %||% names(COLOR_PALETTES)[1], list())
+
+    rows <- lapply(levels, function(level) {
+      iid <- palette_override_input_id(target, level)
+      reset_id <- paste0(iid, "_reset")
+      current_val <- isolate(input[[iid]]) %||% defaults[[level]]
+
+      div(
+        class = "settings-color-row",
+        div(
+          class = "settings-color-label",
+          tags$span(class = "settings-color-chip", style = paste0("background:", defaults[[level]], ";")),
+          tags$span(level)
+        ),
+        div(
+          class = "settings-color-controls",
+          colourpicker::colourInput(
+            inputId = iid,
+            label = NULL,
+            value = current_val,
+            showColour = "background",
+            returnName = FALSE
+          ),
+          actionButton(reset_id, "\u9ed8\u8ba4", class = "btn btn-sm btn-outline-secondary settings-mini-btn")
+        )
+      )
+    })
+
+    tagList(
+      selectInput(
+        "palette_target_column",
+        "\u989c\u8272\u6620\u5c04\u5b57\u6bb5",
+        choices = setNames(choices, choices),
+        selected = target,
+        width = "100%"
+      ),
+      tags$div(
+        class = "settings-inline-note",
+        "\u57fa\u7840 palette \u4f1a\u5148\u751f\u6210\u6240\u6709\u989c\u8272\uff0c\u4e0b\u65b9\u53ea\u9700\u8986\u76d6\u4f60\u60f3\u5355\u72ec\u8c03\u6574\u7684\u503c\u3002"
+      ),
+      div(class = "settings-color-grid", rows)
+    )
+  })
+
+  observe({
+    target <- current_color_target()
+    levels <- current_color_levels()
+    base_palette <- input$color_palette %||% names(COLOR_PALETTES)[1]
+    defaults <- palette_values_for_levels(levels, base_palette, list())
+
+    for (level in levels) local({
+      current_level <- level
+      current_target <- target
+      reset_id <- paste0(palette_override_input_id(current_target, current_level), "_reset")
+      color_input_id <- palette_override_input_id(current_target, current_level)
+
+      observeEvent(input[[reset_id]], {
+        colourpicker::updateColourInput(session, color_input_id, value = defaults[[current_level]])
+      }, ignoreInit = TRUE)
+    })
+  })
+
+  output$chart_opts_ui <- renderUI({
+    defs <- current_defs()
     if (length(defs) == 0) {
-      return(tags$p(class = "text-muted small mt-2", "No chart-specific settings for this chart."))
+      return(tags$p(class = "text-muted small mt-2", "\u5f53\u524d\u56fe\u8868\u6682\u65e0\u4e13\u5c5e\u8bbe\u7f6e\u3002"))
     }
 
     basic_defs <- Filter(function(d) (d$group %||% "basic") == "basic", defs)
@@ -296,21 +482,22 @@ init_mod_settings <- function(input, output, session, rv) {
 
     tagList(
       if (length(basic_defs) > 0) build_controls(basic_defs),
-      if (length(adv_defs) > 0)
+      if (length(adv_defs) > 0) {
         bslib::accordion(
           open = FALSE,
-          bslib::accordion_panel("Advanced", build_controls(adv_defs))
+          bslib::accordion_panel("\u9ad8\u7ea7\u8bbe\u7f6e", build_controls(adv_defs))
         )
+      }
     )
   })
 
-  build_scene_cards <- function(presets, id_prefix, active_chart_type) {
+  build_scene_cards <- function(presets, id_prefix, family_label, active_chart_type) {
     cards <- lapply(presets, function(p) {
       actionButton(
         inputId = paste0(id_prefix, p$id),
         label = div(
-          div(style = "font-size:1.3em; line-height:1.2;", p$icon),
-          div(style = "font-weight:600; font-size:0.78rem; margin-top:2px;", p$name),
+          div(style = "font-size:1.25em; line-height:1.2;", p$icon),
+          div(style = "font-weight:600; font-size:0.8rem; margin-top:2px;", p$name),
           div(style = "font-size:0.68rem; color:#6c757d; line-height:1.2;", p$desc)
         ),
         class = paste0(
@@ -318,27 +505,30 @@ init_mod_settings <- function(input, output, session, rv) {
           if (identical(active_chart_type, p$chart_type)) " active border-primary" else ""
         ),
         style = paste0(
-          "width:86px; height:76px; white-space:normal; text-align:center; ",
-          "padding:4px 3px; border:1px solid #dee2e6; border-radius:8px; ",
-          "margin:2px; vertical-align:top;"
+          "width:90px; height:80px; white-space:normal; text-align:center; ",
+          "padding:4px 3px; border:1px solid #dee2e6; border-radius:10px; margin:2px;"
         )
       )
     })
 
-    tagList(
-      tags$p(class = "text-muted small mb-1 mt-1", style = "font-weight:600; letter-spacing:.03em;", "Scene Templates"),
-      div(style = "display:flex; flex-wrap:wrap; gap:2px; margin-bottom:4px;", cards),
-      tags$hr(style = "margin: 8px 0 6px;")
+    div(
+      class = "settings-scene-block",
+      div(class = "settings-inline-note settings-scene-label", family_label),
+      div(style = "display:flex; flex-wrap:wrap; gap:4px;", cards)
     )
   }
 
   apply_scene_preset <- function(p) {
     updateSelectInput(session, "chart_type_select", selected = p$chart_type)
 
-    shinyjs::delay(450, {
+    if (!is.null(p$options$color_palette) && p$options$color_palette %in% names(COLOR_PALETTES)) {
+      updateSelectInput(session, "color_palette", selected = p$options$color_palette)
+    }
+
+    shinyjs::delay(350, {
       chart <- CHARTS[[p$chart_type]]
-      defs <- chart$options_def %||% list()
-      opts <- p$options
+      defs <- Filter(function(d) !identical(d$id, "color_palette"), chart$options_def %||% list())
+      opts <- p$options %||% list()
 
       for (d in defs) {
         val <- opts[[d$id]]
@@ -358,29 +548,45 @@ init_mod_settings <- function(input, output, session, rv) {
     })
 
     showNotification(
-      tags$span(icon("wand-magic-sparkles"), paste0("Scene template applied: ", p$name)),
-      type = "message", duration = 2
+      paste0("\u5df2\u5e94\u7528\u5b98\u65b9\u573a\u666f\u6a21\u677f\uff1a", p$name),
+      type = "message",
+      duration = 3
     )
   }
 
-  output$bar_scene_ui <- renderUI({
-    bar_ids <- if (length(BAR_FAMILY_IDS) > 0) BAR_FAMILY_IDS else {
-      bar_key <- grep("\u67f1\u56fe", names(CHART_MENU_GROUPS), value = TRUE)[1]
-      if (!is.na(bar_key)) unname(unlist(CHART_MENU_GROUPS[[bar_key]])) else character(0)
+  output$scene_templates_ui <- renderUI({
+    current_id <- input$chart_type_select
+
+    bar_ids <- if (length(BAR_FAMILY_IDS) > 0) BAR_FAMILY_IDS else character(0)
+    scatter_ids <- if (length(SCATTER_FAMILY_IDS) > 0) SCATTER_FAMILY_IDS else character(0)
+
+    blocks <- list()
+
+    if (isTRUE(current_id %in% bar_ids)) {
+      blocks[[length(blocks) + 1L]] <- build_scene_cards(
+        BAR_SCENE_PRESETS,
+        "bar_scene_",
+        "\u67f1\u56fe\u5bb6\u65cf\u5b98\u65b9\u6a21\u677f",
+        current_id
+      )
+    }
+    if (isTRUE(current_id %in% scatter_ids)) {
+      blocks[[length(blocks) + 1L]] <- build_scene_cards(
+        SCATTER_SCENE_PRESETS,
+        "scatter_scene_",
+        "\u6563\u70b9\u56fe\u5bb6\u65cf\u5b98\u65b9\u6a21\u677f",
+        current_id
+      )
     }
 
-    if (!isTRUE(input$chart_type_select %in% bar_ids)) return(NULL)
-    build_scene_cards(BAR_SCENE_PRESETS, "bar_scene_", input$chart_type_select)
-  })
-
-  output$scatter_scene_ui <- renderUI({
-    scatter_ids <- if (length(SCATTER_FAMILY_IDS) > 0) SCATTER_FAMILY_IDS else {
-      scatter_key <- grep("\u6563\u70b9\u56fe", names(CHART_MENU_GROUPS), value = TRUE)[1]
-      if (!is.na(scatter_key)) unname(unlist(CHART_MENU_GROUPS[[scatter_key]])) else character(0)
+    if (length(blocks) == 0) {
+      return(tags$p(
+        class = "settings-inline-note",
+        "\u5f53\u524d\u56fe\u8868\u6682\u65e0\u5bf9\u5e94\u7684\u5b98\u65b9\u573a\u666f\u6a21\u677f\u3002"
+      ))
     }
 
-    if (!isTRUE(input$chart_type_select %in% scatter_ids)) return(NULL)
-    build_scene_cards(SCATTER_SCENE_PRESETS, "scatter_scene_", input$chart_type_select)
+    do.call(tagList, blocks)
   })
 
   lapply(BAR_SCENE_PRESETS, function(p) {
@@ -393,6 +599,84 @@ init_mod_settings <- function(input, output, session, rv) {
     observeEvent(input[[paste0("scatter_scene_", p$id)]], {
       apply_scene_preset(p)
     }, ignoreInit = TRUE)
+  })
+
+  # API settings modal
+  observeEvent(input$settings_btn, {
+    cfg <- isolate(rv$api_config)
+    provider <- cfg$provider %||% "kimi"
+    pinfo <- LLM_PROVIDERS[[provider]] %||% LLM_PROVIDERS$kimi
+    provider_choices <- setNames(names(LLM_PROVIDERS), vapply(LLM_PROVIDERS, `[[`, character(1), "name"))
+
+    showModal(modalDialog(
+      title = "AI \u63a5\u53e3\u8bbe\u7f6e",
+      size = "m",
+      easyClose = TRUE,
+      footer = tagList(
+        modalButton("\u53d6\u6d88"),
+        actionButton("api_save_btn", "\u4fdd\u5b58\u5e76\u5173\u95ed", class = "btn btn-primary btn-sm", icon = icon("floppy-disk"))
+      ),
+      selectInput("api_provider_select", "\u670d\u52a1\u5546", choices = provider_choices, selected = provider, width = "100%"),
+      conditionalPanel(
+        condition = "input.api_provider_select === 'custom'",
+        textInput(
+          "api_custom_url",
+          "API URL\uff08OpenAI \u517c\u5bb9\uff09",
+          value = cfg$custom_url %||% "",
+          placeholder = "https://your-proxy.com/v1/chat/completions",
+          width = "100%"
+        )
+      ),
+      passwordInput(
+        "api_key_input",
+        "API Key",
+        value = cfg$api_key %||% "",
+        placeholder = pinfo$placeholder %||% "sk-...",
+        width = "100%"
+      ),
+      uiOutput("api_model_ui"),
+      tags$hr(),
+      tags$small(
+        class = "text-muted",
+        icon("circle-info"),
+        " API Key \u4ec5\u5728\u672c\u5730\u4f7f\u7528\uff0c\u4fdd\u5b58\u540e\u5199\u5165 ~/.r-plot-ai/api_config.json\u3002"
+      )
+    ))
+  })
+
+  output$api_model_ui <- renderUI({
+    provider <- input$api_provider_select %||% isolate(rv$api_config$provider) %||% "kimi"
+    pinfo <- LLM_PROVIDERS[[provider]] %||% LLM_PROVIDERS$kimi
+    current <- isolate(rv$api_config$model) %||% ""
+
+    if (identical(provider, "custom") || length(pinfo$models) == 0) {
+      textInput("api_model_input", "\u6a21\u578b\u540d\u79f0", value = current, placeholder = "model-name", width = "100%")
+    } else {
+      sel <- if (current %in% pinfo$models) current else pinfo$models[1]
+      selectInput("api_model_input", "\u6a21\u578b", choices = pinfo$models, selected = sel, width = "100%")
+    }
+  })
+
+  observeEvent(input$api_save_btn, {
+    provider <- input$api_provider_select %||% "kimi"
+    api_key <- trimws(input$api_key_input %||% "")
+    model <- trimws(input$api_model_input %||% "")
+    custom_url <- trimws(input$api_custom_url %||% "")
+
+    if (!nzchar(api_key)) {
+      showNotification("API Key \u4e0d\u80fd\u4e3a\u7a7a\u3002", type = "warning", duration = 3)
+      return()
+    }
+
+    cfg <- list(provider = provider, api_key = api_key, model = model, custom_url = custom_url)
+    save_api_config(cfg)
+    rv$api_config <- cfg
+    removeModal()
+    showNotification(
+      tags$span(icon("check"), " API \u914d\u7f6e\u5df2\u4fdd\u5b58\uff0c\u91cd\u542f\u540e\u81ea\u52a8\u751f\u6548\u3002"),
+      type = "message",
+      duration = 3
+    )
   })
 
   invisible(NULL)

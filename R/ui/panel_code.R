@@ -1,9 +1,10 @@
 # =============================================================================
 # File   : R/ui/panel_code.R
-# Purpose: R Code tab UI — copy-to-clipboard button and the verbatim code
-#          output box.  The copy button uses inline JS (copyRCode()) defined
-#          in ui.R's <head> block.
-#          Mirrors server output$r_code_output in R/modules/mod_plot.R.
+# Purpose: R Code tab UI — shallow IDE-style toolbar and the synchronized code
+#          output area. The visible pane renders line numbers and syntax
+#          highlighting, while a hidden raw-text store keeps copy-to-clipboard
+#          output clean. The code shown here is a readable template-style
+#          export, not a 1:1 dump of the internal plot execution path.
 #
 # Exports:
 #   tab_code_ui()
@@ -13,20 +14,36 @@
 
 tab_code_ui <- function() {
   div(
-    class = "p-3",
+    class = "tab-pane-shell code-pane-shell p-3",
     div(
-      style = "position: relative;",
-      tags$button(
-        id      = "copy_code_btn",
-        "Copy Code",
-        onclick = "copyRCode()",
-        class   = "btn btn-sm btn-outline-secondary",
-        style   = paste0(
-          "position:absolute; top:6px; right:6px; z-index:10; ",
-          "font-size:0.78rem;"
+      class = "code-panel-card",
+      div(
+        class = "code-toolbar",
+        div(
+          class = "code-toolbar-copy",
+          div(class = "code-toolbar-title", "可复现 R 代码"),
+          div(class = "code-toolbar-note", "当前图表对应的模板化 R 代码输出")
+        ),
+        tags$button(
+          id = "copy_code_btn",
+          "复制代码",
+          onclick = "copyRCode()",
+          class = "btn btn-sm code-copy-btn",
+          type = "button",
+          `data-default-label` = "复制代码",
+          `data-success-label` = "已复制",
+          `data-failed-label` = "复制失败"
         )
       ),
-      verbatimTextOutput("r_code_output")
+      div(
+        class = "code-pre-shell",
+        div(
+          class = "code-raw-store",
+          textOutput("r_code_output"),
+          uiOutput("r_code_copy_store")
+        ),
+        uiOutput("r_code_view")
+      )
     )
   )
 }

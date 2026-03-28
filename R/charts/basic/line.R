@@ -13,6 +13,9 @@ chart_def <- list(id = "line", name = "折线图", category = "通用图表",
         line_type <- as.character(options$line_type %||% "solid")
         p <- ggplot2::ggplot(data, ggplot2::aes(x = x, y = y))
         if (has_col(data, "group")) {
+            group_levels <- unique(as.character(data$group))
+            pal <- palette_values_for_column(data, "group", options, 
+                levels = group_levels, palette_name = options$palette)
             p <- p + ggplot2::geom_line(ggplot2::aes(color = factor(group), 
                 group = factor(group)), linewidth = line_width, 
                 linetype = line_type)

@@ -24,7 +24,9 @@ chart_def <- list(id = "bar_facet", name = "分面柱状图", name_en = "Faceted
             as.character(data[[g_col]])
         else x_col
         df <- df[!is.na(df$y), ]
-        pal <- get_palette(pal_name, length(unique(df$x)))
+        x_levels <- unique(df$x)
+        pal <- palette_values_for_column(df, "x", options, levels = x_levels, 
+            palette_name = pal_name)
         lp <- .bar_label_params(orient)
         scales <- if (free_y) 
             "free_y"

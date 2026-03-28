@@ -23,8 +23,9 @@ chart_def <- list(id = "bar_stacked", name = "堆叠柱状图", name_en = "Stack
             as.character(data[[g_col]])
         else "全部"
         df <- df[!is.na(df$y), ]
-        n_grp <- length(unique(df$group))
-        pal <- get_palette(pal_name, n_grp)
+        group_levels <- unique(df$group)
+        pal <- palette_values_for_column(df, "group", options, 
+            levels = group_levels, palette_name = pal_name)
         p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, fill = group)) + 
             ggplot2::geom_col(position = "stack", width = bw, 
                 alpha = alp, color = NA) + ggplot2::scale_fill_manual(values = pal, 

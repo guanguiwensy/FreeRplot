@@ -3,8 +3,9 @@
 chart_def <- list(id = "boxplot", name = "箱线图", category = "通用图表", 
     name_en = "Box Plot", plot_fn = function (data, options) 
     {
-        n_g <- length(unique(data$group))
-        pal <- get_palette(options$palette, n_g)
+        group_levels <- unique(as.character(data$group))
+        pal <- palette_values_for_column(data, "group", options, 
+            levels = group_levels, palette_name = options$palette)
         show_points <- isTRUE(options$show_points)
         notch <- isTRUE(options$notch)
         box_width <- as.numeric(options$box_width %||% 0.6)

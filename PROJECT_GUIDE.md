@@ -3,6 +3,9 @@
 > **Purpose of this document**: machine-readable reference for LLM-assisted
 > maintenance.  When modifying the project, read the relevant section first to
 > understand dependencies before editing any file.
+>
+> **Read first**: before any development work, also read `DEVELOPMENT_RULES.md`.
+> The constraints in that file are part of the project's ongoing maintenance rules.
 
 ---
 

@@ -3,7 +3,9 @@
 chart_def <- list(id = "density", name = "密度图", category = "通用图表", 
     name_en = "Density Plot", plot_fn = function (data, options) 
     {
-        pal <- get_palette(options$palette, 7)
+        group_levels <- unique(as.character(data$group))
+        pal <- palette_values_for_column(data, "group", options, 
+            levels = group_levels, palette_name = options$palette)
         fill_alpha <- as.numeric(options$fill_alpha %||% 0.6)
         line_width <- as.numeric(options$line_width %||% 1)
         bw_adjust <- as.numeric(options$bw_adjust %||% 1)

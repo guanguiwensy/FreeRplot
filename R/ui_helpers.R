@@ -25,9 +25,13 @@
 #     Parameters: defs [list] subset of chart$options_def.
 #     Returns: tagList
 #
-#   collect_options(input)
-#     Reads all opt_* input values and returns them as a named list.
-#     Parameters: input [Shiny input] reactive input object.
+#   collect_options(input, defs = NULL)
+#     Reads opt_* input values and returns them as a named list.  When defs are
+#     provided, only options declared in the active chart's options_def are
+#     collected, which prevents stale controls from a previously selected chart
+#     from leaking into plot generation or recipe saving.
+#     Parameters: input [Shiny input] reactive input object; defs [list|NULL]
+#                 current chart$options_def.
 #     Returns: named list  e.g. list(alpha=0.7, show_smooth=TRUE, ...)
 #
 #   get_default_options(chart_id)
@@ -202,9 +206,14 @@ build_controls <- function(defs) {
 # named list with the "opt_" prefix stripped.
 # Call inside observeEvent / reactive where input is in scope.
 
-collect_options <- function(input) {
+collect_options <- function(input, defs = NULL) {
   all_inputs <- shiny::reactiveValuesToList(input)
-  opt_keys   <- names(all_inputs)[startsWith(names(all_inputs), "opt_")]
+  if (!is.null(defs)) {
+    declared <- vapply(defs, function(d) paste0("opt_", d$id), character(1))
+    opt_keys <- intersect(declared, names(all_inputs))
+  } else {
+    opt_keys <- names(all_inputs)[startsWith(names(all_inputs), "opt_")]
+  }
   if (length(opt_keys) == 0) return(list())
   setNames(
     lapply(opt_keys, function(k) all_inputs[[k]]),

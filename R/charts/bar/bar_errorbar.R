@@ -42,7 +42,14 @@ chart_def <- list(id = "bar_errorbar", name = "误差线柱状图", name_en = "B
         n_grp <- if (!is.null(g_col)) 
             length(unique(df$group))
         else 1
-        pal <- get_palette(pal_name, max(n_grp, 1))
+        if (!is.null(g_col) && "group" %in% names(df)) {
+            group_levels <- unique(df$group)
+            pal <- palette_values_for_column(df, "group", options, 
+                levels = group_levels, palette_name = pal_name)
+        }
+        else {
+            pal <- get_palette(pal_name, max(n_grp, 1))
+        }
         lp <- .bar_label_params(orient)
         if (!is.null(g_col) && "group" %in% names(df)) {
             dw <- 0.75

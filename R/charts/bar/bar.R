@@ -4,7 +4,10 @@ chart_def <- list(id = "bar", name = "柱状图", category = "通用图表",
     name_en = "Bar Chart", plot_fn = function (data, options) 
     {
         n_cat <- length(unique(data$category))
-        pal <- get_palette(options$palette, max(n_cat, 6))
+        target_col <- if (!is.null(g_col)) "group" else "x"
+        target_levels <- if (!is.null(g_col)) unique(df$group) else unique(df$x)
+        pal <- palette_values_for_column(df, target_col, options, 
+            levels = target_levels, palette_name = options$palette)
         orientation <- as.character(options$orientation %||% 
             "vertical")
         show_value_labels <- isTRUE(options$show_value_labels)

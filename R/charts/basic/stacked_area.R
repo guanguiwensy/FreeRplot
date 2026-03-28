@@ -4,7 +4,9 @@ chart_def <- list(id = "stacked_area", name = "堆叠面积图", category = "通
     name_en = "Stacked Area Chart", plot_fn = function (data, 
         options) 
     {
-        pal <- get_palette(options$palette, length(unique(data$group)))
+        group_levels <- unique(as.character(data$group))
+        pal <- palette_values_for_column(data, "group", options, 
+            levels = group_levels, palette_name = options$palette)
         fill_alpha <- as.numeric(options$fill_alpha %||% 0.8)
         line_width <- as.numeric(options$line_width %||% 0.3)
         show_points <- isTRUE(options$show_points)

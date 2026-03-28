@@ -9,6 +9,9 @@ chart_def <- list(id = "area", name = "面积图", category = "通用图表",
         show_points <- isTRUE(options$show_points)
         p <- ggplot2::ggplot(data, ggplot2::aes(x = x, y = y))
         if (has_col(data, "group")) {
+            group_levels <- unique(as.character(data$group))
+            pal <- palette_values_for_column(data, "group", options, 
+                levels = group_levels, palette_name = options$palette)
             p <- p + ggplot2::geom_area(ggplot2::aes(fill = factor(group), 
                 group = factor(group)), alpha = fill_alpha, position = "identity", 
                 linewidth = line_width) + ggplot2::geom_line(ggplot2::aes(color = factor(group), 

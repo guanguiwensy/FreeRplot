@@ -24,8 +24,9 @@ chart_def <- list(id = "bar_grouped", name = "分组柱状图", name_en = "Group
             as.character(data[[g_col]])
         else "全部"
         df <- df[!is.na(df$y), ]
-        n_grp <- length(unique(df$group))
-        pal <- get_palette(pal_name, n_grp)
+        group_levels <- unique(df$group)
+        pal <- palette_values_for_column(df, "group", options, 
+            levels = group_levels, palette_name = pal_name)
         lp <- .bar_label_params(orient)
         p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y, fill = group)) + 
             ggplot2::geom_col(position = ggplot2::position_dodge(width = dw), 

@@ -7,14 +7,16 @@
 # Module wiring (load order matters — settings first so show_when is ready):
 #   init_mod_settings  — show_when visibility, presets, API config modal
 #   init_mod_ai_chat   — intent engine, LLM chat, suggestion card
-#   init_mod_data      — sample loading, CSV upload, paste import, grid
+#   init_mod_data      – sample loading, file import, paste import, grid
 #   init_mod_plot      — generate_btn, render, download, gallery, R code
 #
 # Shared reactive state (rv):
 #   messages        [list]  OpenAI-format message history (includes system prompt)
 #   current_data    [df]    active dataset (updated by mod_data, mod_ai_chat)
+#   current_data_source [chr]  current data origin: sample | upload | paste | user_edit
 #   suggestion      [list]  most recent AI chart recommendation (or NULL)
 #   current_plot    [ggplot|circos|NULL]  rendered plot object
+#   current_plot_code [chr|NULL]  last successful 1:1 synchronized R script
 #   api_config      [list]  {provider, api_key, model, custom_url}
 #   pending_intent  [list|NULL]  medium-confidence intent awaiting confirmation
 #   patch_history   [list]  undo stack — snapshots of input state (max 10)
@@ -25,8 +27,10 @@ server <- function(input, output, session) {
   rv <- reactiveValues(
     messages        = list(list(role = "system", content = build_system_prompt())),
     current_data    = CHARTS[["scatter_basic"]]$sample_data,
+    current_data_source = "sample",
     suggestion      = NULL,
     current_plot    = NULL,
+    current_plot_code = NULL,
     api_config      = load_api_config(),   # read from ~/.r-plot-ai/api_config.json
     pending_intent  = NULL,
     patch_history   = list()

@@ -3,8 +3,9 @@
 chart_def <- list(id = "violin", name = "小提琴图", category = "通用图表", 
     name_en = "Violin Plot", plot_fn = function (data, options) 
     {
-        n_g <- length(unique(data$group))
-        pal <- get_palette(options$palette, n_g)
+        group_levels <- unique(as.character(data$group))
+        pal <- palette_values_for_column(data, "group", options, 
+            levels = group_levels, palette_name = options$palette)
         show_boxplot <- if (is.null(options$show_boxplot)) 
             TRUE
         else isTRUE(options$show_boxplot)
