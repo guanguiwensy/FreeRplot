@@ -19,7 +19,7 @@
 #                 rv$current_data_source
 #
 # Key observers / outputs:
-#   observeEvent(input$chart_type_select)  switches sample data only when safe
+#   observeEvent(input$chart_type_select)  default: switches to chart sample data
 #   observeEvent(input$load_sample_btn)    explicit sample data reload
 #   observeEvent(input$upload_file)        file import -> validate -> rv$current_data
 #   observeEvent(input$paste_import_btn)   pasted table -> validate -> rv$current_data
@@ -61,6 +61,31 @@ local({
       stop(sprintf("Chart '%s' has no sample data.", chart_id))
     }
     .as_plain_data_frame(chart$sample_data)
+  }
+
+  .sample_file_for_chart <- function(chart_id) {
+    if (is.null(chart_id) || !nzchar(chart_id)) return(NULL)
+    path <- file.path(APP_DIR, "data", "samples", paste0(chart_id, ".csv"))
+    if (!file.exists(path)) return(NULL)
+    normalizePath(path, winslash = "/", mustWork = FALSE)
+  }
+
+  .persist_runtime_csv <- function(df, prefix = "runtime") {
+    if (is.null(df) || !is.data.frame(df) || ncol(df) == 0L) return(NULL)
+
+    out_dir <- file.path(APP_DIR, "data", "runtime")
+    dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+
+    stamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+    target <- file.path(out_dir, sprintf("%s_%s.csv", prefix, stamp))
+
+    ok <- tryCatch({
+      utils::write.csv(df, target, row.names = FALSE, fileEncoding = "UTF-8")
+      TRUE
+    }, error = function(e) FALSE)
+
+    if (!isTRUE(ok) || !file.exists(target)) return(NULL)
+    normalizePath(target, winslash = "/", mustWork = FALSE)
   }
 
   .split_column_specs <- function(columns_txt) {
@@ -393,6 +418,7 @@ local({
 
     rv$current_data <- live_data
     rv$current_data_source <- "user_edit"
+    rv$current_data_file <- .persist_runtime_csv(live_data, "user_edit")
     log_info(
       .MODULE,
       "captured unsaved table edits: %d rows x %d cols",
@@ -474,15 +500,30 @@ local({
       req(input$chart_type_select)
       chart_id <- input$chart_type_select
 
-      .capture_unsaved_table_edits(input, rv)
-      current_source <- rv$current_data_source %||% "sample"
+      preserve_once <- isTRUE(rv$preserve_data_on_chart_change)
+      rv$preserve_data_on_chart_change <- FALSE
 
-      if (identical(current_source, "sample")) {
-        log_debug(.MODULE, "chart switched to '%s', loading sample data", chart_id)
-        rv$current_data <- .sample_data_for_chart(chart_id)
-        rv$current_data_source <- "sample"
+      has_data <- is.data.frame(rv$current_data) && nrow(rv$current_data) > 0 && ncol(rv$current_data) > 0
+      if (isTRUE(preserve_once) && isTRUE(has_data)) {
+        .capture_unsaved_table_edits(input, rv)
+        log_info(
+          .MODULE,
+          "chart switched to '%s'; preserving current data source='%s' (recommendation path)",
+          chart_id,
+          rv$current_data_source %||% "unknown"
+        )
         return()
       }
+
+      if (isTRUE(preserve_once) && !isTRUE(has_data)) {
+        log_warn(.MODULE, "chart switched to '%s'; preserve requested but no active data, fallback to sample", chart_id)
+      } else {
+        log_debug(.MODULE, "chart switched to '%s', loading sample data", chart_id)
+      }
+      rv$current_data <- .sample_data_for_chart(chart_id)
+      rv$current_data_source <- "sample"
+      rv$current_data_file <- .sample_file_for_chart(chart_id)
+      return()
 
       log_info(
         .MODULE,
@@ -504,6 +545,7 @@ local({
       log_info(.MODULE, "load_sample_btn: chart='%s'", chart_id)
       rv$current_data <- .sample_data_for_chart(chart_id)
       rv$current_data_source <- "sample"
+      rv$current_data_file <- .sample_file_for_chart(chart_id)
     })
 
     observeEvent(input$upload_file, {
@@ -531,6 +573,7 @@ local({
 
       rv$current_data <- validated$data
       rv$current_data_source <- "upload"
+      rv$current_data_file <- .persist_runtime_csv(validated$data, "upload")
 
       log_info(
         .MODULE,
@@ -597,6 +640,7 @@ local({
 
       rv$current_data <- validated$data
       rv$current_data_source <- "paste"
+      rv$current_data_file <- .persist_runtime_csv(validated$data, "paste")
       updateTextAreaInput(session, "paste_data_area", value = "")
 
       log_info(

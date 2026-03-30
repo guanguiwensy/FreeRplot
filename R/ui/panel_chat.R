@@ -18,9 +18,31 @@ chat_panel_ui <- function() {
     card_header(
       style = "flex-shrink: 0;",
       div(
-        class = "d-flex align-items-center justify-content-between",
-        div("AI Chart Advisor"),
-        tags$small(class = "text-muted", "Describe your data and visualisation goal")
+        class = "d-flex align-items-center justify-content-between gap-2 flex-wrap",
+        div(
+          class = "d-flex align-items-center gap-2 flex-wrap",
+          div("AI Chart Advisor"),
+          tags$small(class = "text-muted", "Describe your data and visualisation goal")
+        ),
+        div(
+          class = "pane-header-controls",
+          tags$button(
+            type = "button",
+            class = "btn btn-outline-secondary btn-sm pane-ctrl-btn",
+            title = "Minimize AI chat",
+            `data-pane-action` = "toggle-sub-min",
+            `data-pane-target` = "left-pane-chat",
+            icon("minus")
+          ),
+          tags$button(
+            type = "button",
+            class = "btn btn-outline-secondary btn-sm pane-ctrl-btn",
+            title = "Maximize AI chat",
+            `data-pane-action` = "toggle-sub-max",
+            `data-pane-target` = "left-pane-chat",
+            icon("expand")
+          )
+        )
       )
     ),
 
@@ -56,6 +78,7 @@ chat_panel_ui <- function() {
         div(
           class = "d-flex flex-column gap-2",
           actionButton("send_btn",  "Send",  class = "btn btn-primary btn-sm",          icon = icon("paper-plane")),
+          actionButton("undo_btn",  "Undo",  class = "btn btn-outline-warning btn-sm",  icon = icon("rotate-left")),
           actionButton("clear_btn", "Clear", class = "btn btn-outline-secondary btn-sm")
         )
       )

@@ -229,7 +229,14 @@ collect_options <- function(input, defs = NULL) {
 # (e.g., server-side code-template rendering before user interaction).
 
 get_default_options <- function(chart) {
-  defs <- chart$options_def
+  # Backward-compatible: accept either chart_id (character) or chart object.
+  chart_obj <- chart
+  if (is.character(chart) && length(chart) == 1) {
+    chart_obj <- CHARTS[[chart]]
+  }
+  if (is.null(chart_obj) || !is.list(chart_obj)) return(list())
+
+  defs <- chart_obj$options_def
   if (is.null(defs) || length(defs) == 0) return(list())
   setNames(
     lapply(defs, function(d) d$default),

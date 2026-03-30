@@ -1,0 +1,90 @@
+{
+  "intent_engine": {
+    "synonyms": {
+      "plot_title": ["标题", "题目", "图题", "图名", "图表名", "图表标题", "title", "chart title", "plot title", "名字", "名称"],
+      "x_label": ["x轴", "x轴标签", "x轴标题", "x轴名", "x轴名称", "横轴", "横轴标签", "横坐标", "x坐标轴", "x label", "xlabel", "x-label"],
+      "y_label": ["y轴", "y轴标签", "y轴标题", "y轴名", "y轴名称", "纵轴", "纵轴标签", "纵坐标", "y坐标轴", "y label", "ylabel", "y-label"],
+      "alpha": ["透明度", "alpha", "不透明度", "透明"],
+      "point_size": ["点大小", "点尺寸", "点的大小", "散点大小", "point size", "pointsize", "point_size"],
+      "bar_width": ["柱宽", "条宽", "bar width", "barwidth"],
+      "line_size": ["线宽", "线条粗细", "线条宽度", "line width", "linewidth"],
+      "label_size": ["标签字号", "标签大小", "label size", "labelsize"],
+      "font_size": ["字号", "字体大小", "font size", "fontsize"],
+      "show_labels": ["标签", "数值标签", "数据标签", "label", "labels", "data label"],
+      "show_smooth": ["趋势线", "拟合线", "回归线", "smooth", "trend", "trendline"],
+      "show_legend": ["图例", "legend"]
+    },
+    "change_verbs": ["改成", "改为", "设为", "设置为", "换成", "换为", "变成", "调整为", "修改为", "更改为", "替换为", "替换成", "用", "叫", "命名为", "取名", "起名", "=", "：", ":", "->", "→", "—>"],
+    "undo_triggers": ["撤销", "回退", "undo", "取消上一步", "恢复上一次", "撤回", "还原"],
+    "bool_on": ["开", "开启", "显示", "打开", "on", "true", "yes", "要", "需要", "加上", "加", "启用"],
+    "bool_off": ["关", "关闭", "隐藏", "去掉", "去除", "off", "false", "no", "不要", "不显示", "禁用", "移除"],
+    "axis_aliases": {
+      "x": ["x坐标范围", "x轴范围", "x范围", "x range", "x坐标", "x轴", "横坐标范围", "横轴范围", "横坐标", "横轴", "x-axis", "x axis"],
+      "y": ["y坐标范围", "y轴范围", "y范围", "y range", "y坐标", "y轴", "纵坐标范围", "纵轴范围", "纵坐标", "纵轴", "y-axis", "y axis"]
+    },
+    "axis_auto_patterns": {
+      "x": "(?i)x.*自动.*范围|x范围.*自动",
+      "y": "(?i)y.*自动.*范围|y范围.*自动"
+    },
+    "numeric_setting_aliases": {
+      "plot_width_in": ["宽度", "宽", "width"],
+      "plot_height_in": ["高度", "高", "height"],
+      "plot_dpi": ["dpi", "分辨率", "清晰度"]
+    }
+  },
+  "mod_ai_chat": {
+    "undo_command_pattern": "^(\\s*)(撤销|回退|undo|rollback)(\\s*[。.!！]?)$",
+    "compound_request_pattern": "(并且|并|同时|再|,|，|;|；|and|then)",
+    "tune_like_pattern": "改|调|大|小|透明|主题|配色|标题|形状|三角|回归|趋势|映射|高亮|alpha|size|theme|palette|title|label|shape|smooth|regression|highlight|mapping",
+    "local_patch": {
+      "plot_title": "(?:标题|title)\\s*(?:改成|改为|设为|=|:)\\s*[\\\"“”']?([^\\\"“”']+)[\\\"“”']?",
+      "x_label": "(?:x轴|x轴标题|x label|xlabel)\\s*(?:改成|改为|设为|=|:)\\s*[\\\"“”']?([^\\\"“”']+)[\\\"“”']?",
+      "y_label": "(?:y轴|y轴标题|y label|ylabel)\\s*(?:改成|改为|设为|=|:)\\s*[\\\"“”']?([^\\\"“”']+)[\\\"“”']?",
+      "plot_width_in": "(?:宽度|width)\\s*(?:改成|改为|设为|=|:)?\\s*([0-9]+(?:\\.[0-9]+)?)",
+      "plot_height_in": "(?:高度|height)\\s*(?:改成|改为|设为|=|:)?\\s*([0-9]+(?:\\.[0-9]+)?)",
+      "plot_dpi": "(?:dpi|分辨率)\\s*(?:改成|改为|设为|=|:)?\\s*([0-9]+(?:\\.[0-9]+)?)",
+      "x_range": "(?:x范围|x range)\\s*([\\-]?[0-9]+(?:\\.[0-9]+)?)\\s*(?:到|~|-)\\s*([\\-]?[0-9]+(?:\\.[0-9]+)?)",
+      "y_range": "(?:y范围|y range)\\s*([\\-]?[0-9]+(?:\\.[0-9]+)?)\\s*(?:到|~|-)\\s*([\\-]?[0-9]+(?:\\.[0-9]+)?)",
+      "x_auto_range": "x.*自动.*范围|x范围.*自动",
+      "y_auto_range": "y.*自动.*范围|y范围.*自动",
+      "alpha": "(?:透明度|alpha)\\s*(?:改成|改为|设为|=|:)?\\s*([0-9]+(?:\\.[0-9]+)?)",
+      "point_size": "(?:点大小|点尺寸|point ?size)\\s*(?:改成|改为|设为|=|:)?\\s*([0-9]+(?:\\.[0-9]+)?)",
+      "smooth_trigger": "趋势线|拟合线|smooth",
+      "labels_trigger": "标签|label",
+      "bool_on": "开|显示|开启|on|true",
+      "bool_off": "关|隐藏|关闭|off|false"
+    }
+  },
+  "code_engine": {
+    "quick_ops_patterns": {
+      "title_set_safe": "(?:标题|title)\\s*(?:改成|改为|设为|设置为|to|:|=)\\s*[\\\"'“”‘’]?([^\\\"'“”‘’\\n,，;；]{1,100})[\\\"'“”‘’]?",
+      "xlabel_set_safe": "(?:x\\s*轴(?:名称|标签)?|x\\s*axis|x\\s*label|xlabel)\\s*(?:改成|改为|设为|设置为|to|:|=)\\s*[\\\"'“”‘’]?([^\\\"'“”‘’\\n]{1,80})[\\\"'“”‘’]?",
+      "ylabel_set_safe": "(?:y\\s*轴(?:名称|标签)?|y\\s*axis|y\\s*label|ylabel)\\s*(?:改成|改为|设为|设置为|to|:|=)\\s*[\\\"'“”‘’]?([^\\\"'“”‘’\\n]{1,80})[\\\"'“”‘’]?",
+      "alpha_absolute_safe": "(?:透明度|alpha|opacity)\\s*(?:改成|改为|设为|设置为|to|:|=)\\s*(0?\\.[0-9]+|[01](?:\\.[0-9]+)?)",
+      "smooth_add_safe": "(?:加|添加|显示).*(?:回归线|趋势线|smooth|regression)",
+      "smooth_remove_safe": "(?:去掉|删除|移除|隐藏).*(?:回归线|趋势线|smooth|regression)",
+      "theme_clean_safe": "(?:清爽|简洁|干净|clean|cleaner|minimal)",
+      "alpha_absolute": "(?:透明度?|alpha|opacity)\\s*[=:：]?\\s*(0?\\.[0-9]+|[01](?:\\.[0-9]+)?)",
+      "alpha_more": "(?:更|再)?透明(?:一点|些|点)",
+      "alpha_less": "(?:更|再)?不透明(?:一点|些|点)|加深|更实",
+      "size_absolute": "(?:点?大小|size|点径|粗细)\\s*[=:：]?\\s*([0-9]+(?:\\.[0-9]+)?)",
+      "size_bigger": "(?:更|再)?大(?:一点|些|点)|放大|增大",
+      "size_smaller": "(?:更|再)?小(?:一点|些|点)|缩小|减小",
+      "size_map_to_y": "(?:点?大小|size).*(?:映射|map|mapping).*(?:y)|(?:map|mapping).*(?:size).*(?:y)",
+      "highlight_xy_point": "[\\(（]\\s*(-?[0-9]+(?:\\.[0-9]+)?)\\s*[,，]\\s*(-?[0-9]+(?:\\.[0-9]+)?)\\s*[\\)）].*(红色|red|蓝色|blue|绿色|green|黑色|black|橙色|orange|黄色|yellow|紫色|purple)",
+      "highlight_xy_default": "(?:高亮|突出|标注|highlight).*[\\(（]\\s*(-?[0-9]+(?:\\.[0-9]+)?)\\s*[,，]\\s*(-?[0-9]+(?:\\.[0-9]+)?)\\s*[\\)）]",
+      "shape_triangle": "(?:点形状|shape).*(?:三角|triangle)",
+      "shape_circle": "(?:点形状|shape).*(?:圆形|圆圈|circle)",
+      "shape_square": "(?:点形状|shape).*(?:方形|square)",
+      "shape_numeric": "(?:shape|点形状)\\s*[=:：]?\\s*(1[0-9]|[0-9])",
+      "linewidth_absolute": "(?:线宽|linewidth|line_width|线粗)\\s*[=:：]?\\s*([0-9]+(?:\\.[0-9]+)?)",
+      "theme_named": "(?:换|切换|用|改成|使用)?(?:主题|theme)\\s*[=:：]?\\s*({{chart_themes}})",
+      "palette_named": "(?:换|切换|用|改成|使用)?(?:调色板|palette|配色)\\s*[=:：]?\\s*({{color_palettes}})",
+      "title_set": "(?:标题|title)\\s*[改设为=::：]+\\s*[\\\"'“”‘’]?([^\\\"'“”‘’\\n]{1,80}?)[\\\"'“”‘’]?\\s*$",
+      "xlabel_set": "(?:x轴?(?:标签|标题|label)?|xlabel)\\s*[改设为=::：]+\\s*[\\\"'“”‘’]?([^\\\"'“”‘’\\n]{1,60}?)[\\\"'“”‘’]?\\s*$",
+      "ylabel_set": "(?:y轴?(?:标签|标题|label)?|ylabel)\\s*[改设为=::：]+\\s*[\\\"'“”‘’]?([^\\\"'“”‘’\\n]{1,60}?)[\\\"'“”‘’]?\\s*$",
+      "smooth_add": "(?:加|添加|显示)(?:趋势线|平滑线|smooth)",
+      "smooth_remove": "(?:去掉|删除|移除|隐藏)(?:趋势线|平滑线|smooth)"
+    }
+  }
+}

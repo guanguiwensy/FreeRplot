@@ -1,12 +1,12 @@
 # =============================================================================
 # File   : R/modules/mod_plot.R
-# Purpose: Plot server module — reacts to generate_btn, renders the ggplot to
-#          the main canvas, exports R code, handles PNG/PDF downloads, and
-#          builds the chart gallery tab.
+# Purpose: Plot server module — renders the current plot object to main canvas,
+#          handles base plot downloads, and builds the chart gallery tab.
 #
-# Depends: R/plot_core.R    (generate_plot, COLOR_PALETTES, CHART_THEMES)
-#          R/ui_helpers.R   (collect_options, CHART_MENU_GROUPS)
-#          R/utils/logger.R (log_debug, log_error, safe_run)
+# Depends: R/core/module_shared.R (shared_active_data_reactive,
+#                                  shared_build_plot_options, shared_as_num_or)
+#          R/ui_helpers.R         (CHART_MENU_GROUPS)
+#          R/utils/logger.R       (log_info)
 #
 # Exported functions:
 #   init_mod_plot(input, output, session, rv)
@@ -21,8 +21,6 @@
 #   active_data()          reactive — returns live table data (edited or rv$current_data)
 #   build_plot_options()   reactive — collects all input widgets into an options list
 #   output$main_plot       renderPlot — renders rv$current_plot or placeholder
-#   output$r_code_output   renderText — hidden raw template-style R export
-#   output$r_code_view     renderUI — line-numbered highlighted code view
 #   output$download_plot   downloadHandler — PNG
 #   output$download_plot_pdf downloadHandler — PDF
 #   output$download_csv    downloadHandler — current chart sample-data CSV
@@ -33,191 +31,15 @@ MODULE <- "mod_plot"
 
 init_mod_plot <- function(input, output, session, rv) {
 
-  as_num_or <- function(x, default = NA_real_) {
-    v <- suppressWarnings(as.numeric(x))
-    if (length(v) == 0 || is.na(v[1])) default else v[1]
-  }
-
-  is_probably_numeric <- function(x) {
-    if (is.null(x)) return(FALSE)
-    if (is.numeric(x)) return(TRUE)
-    sx <- suppressWarnings(as.numeric(x))
-    !all(is.na(sx))
-  }
-
-  active_data <- reactive({
-    tryCatch({
-      tbl <- hot_to_r(input$data_table)
-      expected <- names(rv$current_data)
-      if (is.null(tbl) || !all(expected %in% names(tbl))) rv$current_data else tbl
-    }, error = function(e) rv$current_data)
-  })
+  active_data <- shared_active_data_reactive(input, rv)
 
   build_plot_options <- reactive({
-    data <- active_data()
-    chart <- CHARTS[[input$chart_type_select]]
-    defs <- Filter(function(d) !identical(d$id, "color_palette"), chart$options_def %||% list())
-    x_col <- if (ncol(data) >= 1) names(data)[1] else NULL
-    y_col <- if (ncol(data) >= 2) names(data)[2] else NULL
-
-    width_in <- as_num_or(input$plot_width_in, 10)
-    height_in <- as_num_or(input$plot_height_in, 6)
-    dpi <- as_num_or(input$plot_dpi, 150)
-
-    width_in <- min(max(width_in, 2), 40)
-    height_in <- min(max(height_in, 2), 40)
-    dpi <- min(max(dpi, 72), 600)
-
-    x_min <- as_num_or(input$x_min, NA_real_)
-    x_max <- as_num_or(input$x_max, NA_real_)
-    y_min <- as_num_or(input$y_min, NA_real_)
-    y_max <- as_num_or(input$y_max, NA_real_)
-
-    target_column <- input$palette_target_column %||% infer_palette_target(input$chart_type_select, data)
-    color_overrides <- list()
-    if (!is.null(target_column) && target_column %in% names(data)) {
-      levels <- unique(as.character(data[[target_column]]))
-      defaults <- palette_values_for_levels(levels, input$color_palette %||% names(COLOR_PALETTES)[1], list())
-
-      for (level in levels) {
-        iid <- palette_override_input_id(target_column, level)
-        val <- input[[iid]]
-        if (is.null(val)) next
-        val <- as.character(val)[1]
-        if (!nzchar(val)) next
-        if (!identical(toupper(val), toupper(defaults[[level]]))) {
-          color_overrides[[level]] <- val
-        }
-      }
-    }
-
-    c(
-      list(
-        title = input$plot_title,
-        x_label = input$x_label,
-        y_label = input$y_label,
-        palette = input$color_palette,
-        theme = input$chart_theme,
-        plot_width_in = width_in,
-        plot_height_in = height_in,
-        plot_dpi = dpi,
-        x_range_mode = input$x_range_mode %||% "auto",
-        x_min = x_min,
-        x_max = x_max,
-        y_range_mode = input$y_range_mode %||% "auto",
-        y_min = y_min,
-        y_max = y_max,
-        color_settings = list(
-          base_palette = input$color_palette %||% names(COLOR_PALETTES)[1],
-          target_column = target_column,
-          overrides = color_overrides
-        ),
-        x_is_numeric = if (!is.null(x_col)) is_probably_numeric(data[[x_col]]) else FALSE,
-        y_is_numeric = if (!is.null(y_col)) is_probably_numeric(data[[y_col]]) else FALSE
-      ),
-      collect_options(input, defs)
+    shared_build_plot_options(
+      input = input,
+      data = active_data(),
+      chart_id = input$chart_type_select,
+      mapping = shared_collect_column_mapping(input)
     )
-  })
-
-  data_to_r_code <- function(data, max_rows = 200L) {
-    if (is.null(data) || nrow(data) == 0) {
-      return("data <- data.frame()")
-    }
-
-    trimmed <- data
-    note <- NULL
-
-    if (nrow(data) > max_rows) {
-      trimmed <- utils::head(data, max_rows)
-      note <- paste0("# NOTE: showing first ", max_rows, " rows out of ", nrow(data), " total rows")
-    }
-
-    dput_txt <- paste(capture.output(dput(trimmed)), collapse = "\n")
-    block <- paste0("data <- ", dput_txt)
-
-    if (!is.null(note)) {
-      paste(note, block, sep = "\n")
-    } else {
-      block
-    }
-  }
-
-  current_export_code <- reactive({
-    req(input$chart_type_select)
-
-    chart <- CHARTS[[input$chart_type_select]]
-    data <- active_data()
-    opts <- build_plot_options()
-
-    settings_block <- paste0(
-      "# ---- Current Settings ----\n",
-      "title          <- ", dQuote(opts$title %||% ""), "\n",
-      "x_label        <- ", dQuote(opts$x_label %||% ""), "\n",
-      "y_label        <- ", dQuote(opts$y_label %||% ""), "\n",
-      "palette        <- ", dQuote(opts$palette %||% ""), "\n",
-      "theme          <- ", dQuote(opts$theme %||% ""), "\n",
-      "plot_width_in  <- ", opts$plot_width_in %||% 10, "\n",
-      "plot_height_in <- ", opts$plot_height_in %||% 6, "\n",
-      "plot_dpi       <- ", opts$plot_dpi %||% 150, "\n",
-      "x_range_mode   <- ", dQuote(opts$x_range_mode %||% "auto"), "\n",
-      "x_min          <- ", ifelse(is.na(opts$x_min), "NA", as.character(opts$x_min)), "\n",
-      "x_max          <- ", ifelse(is.na(opts$x_max), "NA", as.character(opts$x_max)), "\n",
-      "y_range_mode   <- ", dQuote(opts$y_range_mode %||% "auto"), "\n",
-      "y_min          <- ", ifelse(is.na(opts$y_min), "NA", as.character(opts$y_min)), "\n",
-      "y_max          <- ", ifelse(is.na(opts$y_max), "NA", as.character(opts$y_max))
-    )
-
-    template_code <- "# No chart template available."
-    if (is.function(chart$code_template)) {
-      template_code <- tryCatch({
-        argn <- length(formals(chart$code_template))
-        if (argn >= 2) {
-          chart$code_template(opts, data)
-        } else {
-          chart$code_template(opts)
-        }
-      }, error = function(e) {
-        paste("# Code generation failed:", e$message)
-      })
-    }
-
-    paste(
-      "# ---- Current Data ----",
-      data_to_r_code(data),
-      settings_block,
-      "# ---- Chart Template ----",
-      template_code,
-      sep = "\n\n"
-    )
-  })
-
-  observe({
-    shinyjs::toggleState("copy_code_btn", condition = nzchar(current_export_code()))
-  })
-
-  observeEvent(input$generate_btn, {
-    req(input$chart_type_select)
-    log_debug(MODULE, "generate_btn: chart=%s", input$chart_type_select)
-
-    data <- active_data()
-    if (is.null(data) || nrow(data) == 0) {
-      showNotification("Data is empty. Please load or input data first.", type = "warning")
-      return()
-    }
-
-    options <- build_plot_options()
-
-    p <- safe_run(MODULE, generate_plot(input$chart_type_select, data, options))
-    if (is.null(p)) {
-      showNotification(
-        paste0("Plot failed for '", input$chart_type_select, "'. Check RPLOT_LOG=DEBUG for details."),
-        type = "error", duration = 8
-      )
-      return()
-    }
-
-    log_info(MODULE, "plot generated: chart=%s rows=%d", input$chart_type_select, nrow(data))
-    rv$current_plot <- p
   })
 
   output$main_plot <- renderPlot({
@@ -250,33 +72,15 @@ init_mod_plot <- function(input, output, session, rv) {
     })
   }, bg = "white")
 
-  output$r_code_output <- renderText({
-    current_export_code()
-  })
-
-  output$r_code_copy_store <- renderUI({
-    tags$textarea(
-      id = "r_code_copy_store",
-      class = "code-copy-store",
-      readonly = "readonly",
-      `aria-hidden` = "true",
-      current_export_code()
-    )
-  })
-
-  output$r_code_view <- renderUI({
-    build_r_code_view_ui(current_export_code())
-  })
-
   output$download_plot <- downloadHandler(
     filename = function() paste0(input$chart_type_select, "_", Sys.Date(), ".png"),
     content = function(file) {
       req(rv$current_plot)
       p <- rv$current_plot
       opts <- build_plot_options()
-      w <- as_num_or(opts$plot_width_in, 10)
-      h <- as_num_or(opts$plot_height_in, 6)
-      dpi <- as_num_or(opts$plot_dpi, 150)
+      w <- shared_as_num_or(opts$plot_width_in, 10)
+      h <- shared_as_num_or(opts$plot_height_in, 6)
+      dpi <- shared_as_num_or(opts$plot_dpi, 150)
 
       if (inherits(p, "circos_plot")) {
         grDevices::png(file, width = w, height = h, units = "in", res = dpi)
@@ -294,8 +98,8 @@ init_mod_plot <- function(input, output, session, rv) {
       req(rv$current_plot)
       p <- rv$current_plot
       opts <- build_plot_options()
-      w <- as_num_or(opts$plot_width_in, 10)
-      h <- as_num_or(opts$plot_height_in, 6)
+      w <- shared_as_num_or(opts$plot_width_in, 10)
+      h <- shared_as_num_or(opts$plot_height_in, 6)
 
       if (inherits(p, "circos_plot")) {
         grDevices::pdf(file, width = w, height = h)

@@ -77,9 +77,9 @@ chart_def <- list(id = "bar_filled", name = "百分比堆叠柱状图", name_en 
             if (lbls) 
                 "\n# 计算各组在每个 x 内的占比\nlibrary(dplyr)\ndata <- data |>\n  group_by(quarter) |>\n  mutate(pct = sales / sum(sales)) |>\n  ungroup()\n"
             else "", "\np <- ggplot(data, aes(x = quarter, y = sales, fill = product)) +\n  geom_col(position = \"fill\", width = ", 
-            bw, ", alpha = ", alp, ") +\n  scale_y_continuous(labels = percent_format())", 
+            bw, ", alpha = ", alp, ") +\n  scale_y_continuous(labels = scales::percent_format())", 
             if (lbls) 
-                " +\n  geom_text(aes(label = percent(pct, accuracy = 1), group = product),\n            position = position_fill(vjust = 0.5), size = 3, color = \"white\")"
+                " +\n  geom_text(aes(label = scales::percent(pct, accuracy = 1), group = product),\n            position = position_fill(vjust = 0.5), size = 3, color = \"white\")"
             else "", if (orient == "horizontal") 
                 " +\n  coord_flip()"
             else "", " +\n  scale_fill_brewer(palette = \"Set2\") +\n  labs(x = \"季度\", y = \"占比\", fill = \"产品\") +\n  theme_minimal()\n\nprint(p)")

@@ -37,8 +37,9 @@ ui <- page_fillable(
 
   tags$head(
     shinyjs::useShinyjs(),
-    tags$link(rel = "stylesheet", href = "styles.css"),
-    tags$script(src = "panes.js"),
+    tags$link(rel = "stylesheet", href = "styles.css?v=20260330b"),
+    tags$script(src = "panes.js?v=20260330b"),
+    tags$script(src = "overlay_editor.js?v=20260329e"),
     tags$script(HTML("
       // Send on Enter (Shift+Enter = newline)
       $(document).on('keydown', '#user_input', function(e) {
@@ -141,7 +142,41 @@ ui <- page_fillable(
     tags$small(style = "color:#8bacd4; margin-left:8px;", "Powered by LLM × ggplot2"),
     div(
       style = "margin-left:auto;",
-      actionButton("settings_btn", "Settings", class = "btn btn-sm btn-outline-light")
+      div(
+        class = "layout-tools",
+        tags$button(
+          type = "button",
+          class = "btn btn-sm btn-outline-light layout-tool-btn",
+          title = "Show/Hide AI panel",
+          `data-pane-action` = "toggle-min",
+          `data-pane-target` = "pane-left",
+          icon("comments")
+        ),
+        tags$button(
+          type = "button",
+          class = "btn btn-sm btn-outline-light layout-tool-btn",
+          title = "Show/Hide chart panel",
+          `data-pane-action` = "toggle-min",
+          `data-pane-target` = "pane-right-top",
+          icon("chart-line")
+        ),
+        tags$button(
+          type = "button",
+          class = "btn btn-sm btn-outline-light layout-tool-btn",
+          title = "Show/Hide workbench panel",
+          `data-pane-action` = "toggle-min",
+          `data-pane-target` = "pane-right-bottom",
+          icon("sliders")
+        ),
+        tags$button(
+          type = "button",
+          class = "btn btn-sm btn-outline-light layout-tool-btn",
+          title = "Restore layout",
+          `data-pane-action` = "restore-layout",
+          icon("up-right-and-down-left-from-center")
+        ),
+        actionButton("settings_btn", "Settings", class = "btn btn-sm btn-outline-light")
+      )
     )
   ),
 
@@ -152,7 +187,28 @@ ui <- page_fillable(
     div(
       id = "pane-left",
       class = "pane-shell pane-left-shell",
-      chat_panel_ui()
+      div(
+        id = "left-pane-stack",
+        class = "left-pane-stack",
+        div(
+          id = "left-pane-chat",
+          class = "left-pane-chat",
+          chat_panel_ui()
+        ),
+        div(
+          id = "left-pane-resizer",
+          class = "pane-resizer pane-resizer-y pane-resizer-sub",
+          role = "separator",
+          tabindex = "0",
+          `aria-label` = "Resize chat and recommendation panels",
+          `aria-orientation` = "horizontal"
+        ),
+        div(
+          id = "left-pane-recommend",
+          class = "left-pane-recommend",
+          chart_recommend_panel_ui()
+        )
+      )
     ),
 
     div(
@@ -189,7 +245,31 @@ ui <- page_fillable(
         card(
           class = "workbench-card",
           style = "height: 100%; display: flex; flex-direction: column; min-height: 0;",
-          card_header("Data & Chart Settings"),
+          card_header(
+            div(
+              class = "d-flex align-items-center justify-content-between gap-2 flex-wrap",
+              span("Data & Chart Settings"),
+              div(
+                class = "pane-header-controls",
+                tags$button(
+                  type = "button",
+                  class = "btn btn-outline-secondary btn-sm pane-ctrl-btn",
+                  title = "Minimize workbench panel",
+                  `data-pane-action` = "toggle-min",
+                  `data-pane-target` = "pane-right-bottom",
+                  icon("minus")
+                ),
+                tags$button(
+                  type = "button",
+                  class = "btn btn-outline-secondary btn-sm pane-ctrl-btn",
+                  title = "Maximize workbench panel",
+                  `data-pane-action` = "toggle-max",
+                  `data-pane-target` = "pane-right-bottom",
+                  icon("expand")
+                )
+              )
+            )
+          ),
           div(
             class = "workbench-tab-host",
             tabsetPanel(

@@ -1,7 +1,7 @@
 # =============================================================================
 # File   : R/ui/panel_plot.R
 # Purpose: Plot preview card UI — chart type selector, generate/download
-#          buttons, and the spinner-wrapped plot output area.
+#          buttons, overlay toolbar, and plot output area.
 #          Mirrors render logic in R/modules/mod_plot.R (output$main_plot).
 #
 # Exports:
@@ -13,9 +13,8 @@
 plot_preview_card_ui <- function() {
   card(
     class = "plot-preview-card pane-card",
-    style = "height: 100%; display: flex; flex-direction: column; min-height: 0;",
+    fill  = TRUE,
     card_header(
-      style = "flex-shrink: 0;",
       div(
         class = "d-flex align-items-center gap-2 flex-wrap",
         span("Chart Preview"),
@@ -37,18 +36,51 @@ plot_preview_card_ui <- function() {
             icon  = icon("wand-magic-sparkles")
           ),
 
+          overlay_toolbar_ui(),
+
           downloadButton("download_plot",     "PNG", class = "btn btn-outline-secondary btn-sm"),
-          downloadButton("download_plot_pdf", "PDF", class = "btn btn-outline-secondary btn-sm")
+          downloadButton("download_plot_pdf", "PDF", class = "btn btn-outline-secondary btn-sm"),
+
+          div(
+            class = "pane-header-controls",
+            tags$button(
+              type = "button",
+              class = "btn btn-outline-secondary btn-sm pane-ctrl-btn",
+              title = "Minimize chart panel",
+              `data-pane-action` = "toggle-min",
+              `data-pane-target` = "pane-right-top",
+              icon("minus")
+            ),
+            tags$button(
+              type = "button",
+              class = "btn btn-outline-secondary btn-sm pane-ctrl-btn",
+              title = "Maximize chart panel",
+              `data-pane-action` = "toggle-max",
+              `data-pane-target` = "pane-right-top",
+              icon("expand")
+            )
+          )
         )
       )
     ),
 
-    div(
-      class = "plot-stage",
-      shinycssloaders::withSpinner(
-        plotOutput("main_plot", height = "100%", width = "100%"),
-        color = "#2c7be5",
-        type  = 6
+    bslib::as_fill_carrier(
+      div(
+        class = "plot-stage",
+        div(
+          id = "plot-overlay-host",
+          class = "plot-overlay-host",
+          bslib::as_fill_carrier(
+            plotOutput("main_plot", fill = TRUE)
+          ),
+          tags$svg(
+            id = "overlay_svg",
+            class = "overlay-svg",
+            viewBox = "0 0 1000 1000",
+            preserveAspectRatio = "none",
+            `aria-label` = "Overlay editor layer"
+          )
+        )
       )
     )
   )

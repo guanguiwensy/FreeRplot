@@ -74,6 +74,16 @@ tab_settings_ui <- function() {
 
     div(
       class = "settings-section-card",
+      div(class = "settings-section-title", "\u6570\u636e\u6620\u5c04"),
+      tags$p(
+        class = "settings-section-help",
+        "\u6307\u5b9a\u54ea\u4e00\u5217\u4f5c\u4e3a X/Y/\u5206\u7ec4/\u6807\u7b7e/\u5927\u5c0f\uff0c\u89e3\u51b3\u4e0a\u4f20\u6570\u636e\u65f6\u81ea\u52a8\u731c\u6d4b\u4e0d\u51c6\u7684\u95ee\u9898\u3002"
+      ),
+      uiOutput("data_mapping_ui")
+    ),
+
+    div(
+      class = "settings-section-card",
       div(class = "settings-section-title", "\u989c\u8272"),
       selectInput(
         "color_palette",
@@ -133,6 +143,8 @@ tab_settings_ui <- function() {
         "\u8fd9\u91cc\u53ea\u663e\u793a\u5f53\u524d\u56fe\u8868\u5b9e\u9645\u9700\u8981\u7684\u53c2\u6570\uff0c\u4e0d\u518d\u6df7\u5165\u5176\u4ed6\u56fe\u8868\u6b8b\u7559\u9009\u9879\u3002"
       ),
       uiOutput("chart_opts_ui")
-    )
+    ),
+
+    overlay_settings_section_ui()
   )
 }

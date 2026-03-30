@@ -78,6 +78,30 @@
 CHARTS <- .order_charts_by_menu(.load_charts_from_files())
 CHART_IDS <- names(CHARTS)
 
+ensure_chart_sample_files <- function(charts = CHARTS,
+                                      out_dir = file.path(APP_DIR, "data", "samples"),
+                                      overwrite = FALSE) {
+  if (!dir.exists(out_dir)) {
+    dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  }
+
+  written <- 0L
+
+  for (id in names(charts)) {
+    chart <- charts[[id]]
+    sample_df <- chart$sample_data
+    if (!is.data.frame(sample_df) || nrow(sample_df) == 0 || ncol(sample_df) == 0) next
+
+    target <- file.path(out_dir, paste0(id, ".csv"))
+    if (!isTRUE(overwrite) && file.exists(target)) next
+
+    utils::write.csv(sample_df, target, row.names = FALSE, fileEncoding = "UTF-8")
+    written <- written + 1L
+  }
+
+  written
+}
+
 build_system_prompt <- function() {
   chart_lines <- paste(vapply(CHARTS, function(c) {
     sprintf(

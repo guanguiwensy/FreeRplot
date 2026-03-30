@@ -8,6 +8,10 @@
 #                                 build_controls, collect_options)
 #          R/preset_manager.R   (list_recipe_records, load_recipe, save_recipe,
 #                                 delete_recipe, restore_recipe_inputs)
+#          R/core/module_shared.R (shared_is_probably_numeric,
+#                                  shared_collect_column_mapping,
+#                                  shared_chart_expected_roles,
+#                                  shared_prepare_code_context)
 #          R/config_manager.R   (LLM_PROVIDERS, save_api_config, get_api_url)
 #          R/plot_core.R        (COLOR_PALETTES, CHART_THEMES,
 #                                 candidate_palette_columns,
@@ -24,13 +28,6 @@
 MODULE <- "mod_settings"
 
 init_mod_settings <- function(input, output, session, rv) {
-
-  is_probably_numeric <- function(x) {
-    if (is.null(x)) return(FALSE)
-    if (is.numeric(x)) return(TRUE)
-    sx <- suppressWarnings(as.numeric(x))
-    !all(is.na(sx))
-  }
 
   current_chart <- reactive({
     CHARTS[[input$chart_type_select]]
@@ -70,11 +67,45 @@ init_mod_settings <- function(input, output, session, rv) {
     )
   }
 
+  current_mapping <- reactive({
+    shared_collect_column_mapping(input)
+  })
+
+  guess_mapping_defaults <- function(data, chart_id) {
+    ctx <- shared_prepare_code_context(data, chart_id = chart_id, mapping = list())
+    roles <- shared_chart_expected_roles(chart_id)
+
+    defaults <- list(
+      x = ctx$x_col,
+      y = ctx$y_col,
+      size = if ("size" %in% roles) ctx$size_col else NULL,
+      group = if ("group" %in% roles) ctx$group_col else NULL,
+      label = if ("label" %in% roles) ctx$label_col else NULL
+    )
+
+    if (is.null(data) || ncol(data) == 0) return(defaults)
+
+    cols <- names(data)
+    categorical <- cols[vapply(data, function(col) is.factor(col) || is.character(col) || is.logical(col), logical(1))]
+    if (is.null(defaults$group) && "group" %in% roles && length(categorical) > 0) {
+      defaults$group <- categorical[1]
+    }
+
+    label_pool <- setdiff(categorical, defaults$group %||% character(0))
+    if (is.null(defaults$label) && "label" %in% roles && length(label_pool) > 0) {
+      defaults$label <- label_pool[1]
+    }
+
+    defaults
+  }
+
   current_axis_state <- reactive({
     data <- rv$current_data
+    chart_id <- input$chart_type_select %||% ""
+    ctx <- shared_prepare_code_context(data, chart_id = chart_id, mapping = current_mapping())
     list(
-      x_numeric = if (!is.null(data) && ncol(data) >= 1) is_probably_numeric(data[[1]]) else FALSE,
-      y_numeric = if (!is.null(data) && ncol(data) >= 2) is_probably_numeric(data[[2]]) else FALSE
+      x_numeric = if (!is.null(ctx$x_col) && ctx$x_col %in% names(ctx$data)) shared_is_probably_numeric(ctx$data[[ctx$x_col]]) else FALSE,
+      y_numeric = if (!is.null(ctx$y_col) && ctx$y_col %in% names(ctx$data)) shared_is_probably_numeric(ctx$data[[ctx$y_col]]) else FALSE
     )
   })
 
@@ -158,6 +189,25 @@ init_mod_settings <- function(input, output, session, rv) {
     })
   }
 
+  restore_mapping_inputs <- function(mapping_settings) {
+    mapping_settings <- mapping_settings %||% list()
+    cols <- names(rv$current_data %||% data.frame())
+    if (length(cols) == 0) return(invisible(NULL))
+
+    apply_one <- function(input_id, key) {
+      val <- as.character(mapping_settings[[key]] %||% "")[1]
+      if (!nzchar(val) || !(val %in% cols)) return(invisible(NULL))
+      updateSelectInput(session, input_id, selected = val)
+    }
+
+    apply_one("map_x_col", "x")
+    apply_one("map_y_col", "y")
+    apply_one("map_size_col", "size")
+    apply_one("map_group_col", "group")
+    apply_one("map_label_col", "label")
+    invisible(NULL)
+  }
+
   build_current_recipe <- function(name) {
     chart_id <- isolate(input$chart_type_select)
     list(
@@ -180,6 +230,7 @@ init_mod_settings <- function(input, output, session, rv) {
         y_min = isolate(input$y_min),
         y_max = isolate(input$y_max)
       ),
+      mapping_settings = current_mapping(),
       chart_options = collect_options(input, current_defs()),
       color_settings = current_color_settings()
     )
@@ -300,6 +351,7 @@ init_mod_settings <- function(input, output, session, rv) {
     updateSelectInput(session, "chart_type_select", selected = recipe$chart_id)
     shinyjs::delay(350, {
       restore_recipe_inputs(recipe, CHARTS[[recipe$chart_id]], session)
+      restore_mapping_inputs(recipe$mapping_settings)
       restore_color_settings_inputs(recipe$color_settings)
     })
 
@@ -390,6 +442,67 @@ init_mod_settings <- function(input, output, session, rv) {
     )
   })
 
+  output$data_mapping_ui <- renderUI({
+    data <- rv$current_data %||% data.frame()
+    cols <- names(data)
+    if (length(cols) == 0) {
+      return(tags$p(class = "settings-inline-note", "当前无可映射数据列。"))
+    }
+
+    chart_id <- input$chart_type_select %||% ""
+    roles <- shared_chart_expected_roles(chart_id)
+    roles <- unique(c("x", "y", intersect(roles, c("size", "group", "label"))))
+
+    defaults <- guess_mapping_defaults(data, chart_id)
+    mapping <- current_mapping()
+
+    pick_selected <- function(key) {
+      cur <- as.character(mapping[[key]] %||% "")[1]
+      if (nzchar(cur) && cur %in% cols) return(cur)
+      def <- as.character(defaults[[key]] %||% "")[1]
+      if (nzchar(def) && def %in% cols) return(def)
+      ""
+    }
+
+    choices_required <- setNames(cols, cols)
+    choices_optional <- c("自动" = "", setNames(cols, cols))
+
+    row1 <- layout_columns(
+      col_widths = c(6, 6),
+      selectInput("map_x_col", "X 列", choices = choices_required, selected = pick_selected("x"), width = "100%"),
+      selectInput("map_y_col", "Y 列", choices = choices_required, selected = pick_selected("y"), width = "100%")
+    )
+
+    row2_controls <- list()
+    if ("size" %in% roles) {
+      row2_controls <- c(row2_controls, list(
+        selectInput("map_size_col", "大小列（可选）", choices = choices_optional, selected = pick_selected("size"), width = "100%")
+      ))
+    }
+    if ("group" %in% roles) {
+      row2_controls <- c(row2_controls, list(
+        selectInput("map_group_col", "分组列（可选）", choices = choices_optional, selected = pick_selected("group"), width = "100%")
+      ))
+    }
+    if ("label" %in% roles) {
+      row2_controls <- c(row2_controls, list(
+        selectInput("map_label_col", "标签列（可选）", choices = choices_optional, selected = pick_selected("label"), width = "100%")
+      ))
+    }
+
+    row2 <- NULL
+    if (length(row2_controls) > 0) {
+      width_each <- rep(max(12 %/% length(row2_controls), 3), length(row2_controls))
+      row2 <- do.call(layout_columns, c(list(col_widths = width_each), row2_controls))
+    }
+
+    tagList(
+      tags$p(class = "settings-inline-note", "上传数据后可在这里手动指定映射列；未设置的可选项将自动推断。"),
+      row1,
+      row2
+    )
+  })
+
   output$color_settings_ui <- renderUI({
     chart_id <- input$chart_type_select
     if (chart_id %in% c("bar_value", "bar_horizontal", "bar_count", "bar_diverging")) {
@@ -477,18 +590,56 @@ init_mod_settings <- function(input, output, session, rv) {
       return(tags$p(class = "text-muted small mt-2", "\u5f53\u524d\u56fe\u8868\u6682\u65e0\u4e13\u5c5e\u8bbe\u7f6e\u3002"))
     }
 
-    basic_defs <- Filter(function(d) (d$group %||% "basic") == "basic", defs)
-    adv_defs <- Filter(function(d) (d$group %||% "basic") == "advanced", defs)
+    chart_id <- input$chart_type_select %||% ""
+    layout <- get_chart_settings_layout(chart_id, registry = CHART_CAP_REG)
+    sections <- layout$sections %||% list()
 
-    tagList(
-      if (length(basic_defs) > 0) build_controls(basic_defs),
-      if (length(adv_defs) > 0) {
-        bslib::accordion(
-          open = FALSE,
-          bslib::accordion_panel("\u9ad8\u7ea7\u8bbe\u7f6e", build_controls(adv_defs))
-        )
+    defs_by_id <- setNames(defs, vapply(defs, function(d) d$id, character(1)))
+    used <- character(0)
+    ui_blocks <- list()
+
+    for (sec in sections) {
+      sec_ids <- as.character(unlist(sec$option_ids %||% character(0), use.names = FALSE))
+      sec_ids <- sec_ids[nzchar(sec_ids) & sec_ids %in% names(defs_by_id)]
+      sec_defs <- defs_by_id[sec_ids]
+      if (length(sec_defs) == 0) next
+
+      used <- c(used, sec_ids)
+      sec_label <- sec$label %||% sec$id %||% "Section"
+      sec_is_advanced <- identical(tolower(sec$id %||% ""), "advanced")
+
+      if (isTRUE(sec_is_advanced)) {
+        ui_blocks <- c(ui_blocks, list(
+          bslib::accordion(
+            open = FALSE,
+            bslib::accordion_panel(sec_label, build_controls(sec_defs))
+          )
+        ))
+      } else {
+        ui_blocks <- c(ui_blocks, list(build_controls(sec_defs)))
       }
-    )
+    }
+
+    remaining <- setdiff(names(defs_by_id), unique(used))
+    if (length(remaining) > 0) {
+      remain_defs <- defs_by_id[remaining]
+      remain_basic <- Filter(function(d) (d$group %||% "basic") == "basic", remain_defs)
+      remain_adv <- Filter(function(d) (d$group %||% "basic") == "advanced", remain_defs)
+
+      if (length(remain_basic) > 0) {
+        ui_blocks <- c(ui_blocks, list(build_controls(remain_basic)))
+      }
+      if (length(remain_adv) > 0) {
+        ui_blocks <- c(ui_blocks, list(
+          bslib::accordion(
+            open = FALSE,
+            bslib::accordion_panel("\u9ad8\u7ea7\u8bbe\u7f6e", build_controls(remain_adv))
+          )
+        ))
+      }
+    }
+
+    do.call(tagList, ui_blocks)
   })
 
   build_scene_cards <- function(presets, id_prefix, family_label, active_chart_type) {

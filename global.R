@@ -1,31 +1,10 @@
 # =============================================================================
 # File   : global.R
-# Purpose: Application bootstrap — loaded once before the Shiny server starts.
-#          Pins APP_DIR, loads all packages, sources every module in dependency
-#          order, and defines the two global utility helpers (%||%, strip_json_block).
-#
-# Load order (must not be changed):
-#   1. R/utils/logger.R          — log_* helpers used everywhere below
-#   2. R/config_manager.R        — LLM_PROVIDERS, load/save_api_config
-#   3. R/ui_helpers.R            — CHART_MENU_GROUPS, build_* helpers
-#   4. R/core/intent_engine.R    — parse_intent, snapshot/push/restore history
-#   5. R/chart_registry.R        — CHARTS, CHART_IDS  (depends on ui_helpers)
-#   6. R/plot_core.R             — COLOR_PALETTES, CHART_THEMES, generate_plot
-#   7. R/bar_scene_presets.R     — BAR_SCENE_PRESETS
-#   8. R/scatter_scene_presets.R — SCATTER_SCENE_PRESETS
-#   9. R/kimi_api.R              — chat_with_llm, parse_chart_suggestion
-#  10. R/preset_manager.R        — save/load/delete presets
-#  11. R/ui/*.R                  — panel UI constructor functions (used by ui.R)
-#  12. R/modules/*.R             — server module init functions (used by server.R)
-#
-# Packages:
-#   CORE (always global)  : shiny, bslib, ggplot2, dplyr, tidyr
-#   CHART EXTENSIONS      : ggridges, treemapify, ggDNAvis, circlize
-#   UI / INTERACTION      : shinyjs, rhandsontable, shinycssloaders, colourpicker
-#   NETWORKING / PARSING  : httr2, jsonlite
+# Purpose: App bootstrap. Defines APP_DIR, loads packages, sources all modules,
+#          and provides global utility helpers.
 # =============================================================================
 
-# ── Stable app root (path-independent) ────────────────────────────────────────
+# Stable app root
 APP_DIR <- normalizePath(
   if (nzchar(Sys.getenv("SHINY_APP_DIR"))) {
     Sys.getenv("SHINY_APP_DIR")
@@ -37,92 +16,115 @@ APP_DIR <- normalizePath(
   mustWork = FALSE
 )
 
-# ── Packages ───────────────────────────────────────────────────────────────────
+# Packages
 suppressPackageStartupMessages({
-  # Core Shiny framework
   library(shiny)
   library(bslib)
 
-  # Data wrangling (used by chart plot_fn implementations)
   library(ggplot2)
   library(dplyr)
   library(tidyr)
 
-  # Chart extension packages
-  library(ggridges)        # ridgeline / joy plots
-  library(treemapify)      # treemap geom
-  library(ggDNAvis)        # DNA sequence visualisation
-  library(circlize)        # circular / chord diagrams
+  library(ggridges)
+  library(treemapify)
+  library(ggDNAvis)
+  library(circlize)
 
-  # UI and interaction packages
-  library(shinyjs)         # useShinyjs(), hidden(), delay(), click()
-  library(rhandsontable)   # editable data grid
-  library(shinycssloaders) # withSpinner()
-  library(colourpicker)    # colour picker input + updateColourInput()
+  library(shinyjs)
+  library(rhandsontable)
+  library(shinycssloaders)
+  library(colourpicker)
+  library(shinyAce)
 
-  # Networking / JSON (used by API client and config manager)
   library(httr2)
   library(jsonlite)
 })
 
-# ── Core utilities ─────────────────────────────────────────────────────────────
-source("R/utils/logger.R")           # log_debug/info/warn/error, safe_run
+# Core utilities
+source("R/utils/logger.R")
 
-# ── Configuration & API ────────────────────────────────────────────────────────
-source("R/config_manager.R")         # LLM_PROVIDERS, load_api_config, save_api_config, get_api_url
+# Config and API
+source("R/config_manager.R")
 
-# ── UI helpers (must come before chart_registry loads CHART_MENU_GROUPS) ───────
-source("R/ui_helpers.R")             # CHART_MENU_GROUPS, build_grouped_choices, build_controls, ...
+# UI helpers first (needed by chart registry)
+source("R/ui_helpers.R")
+source("R/core/ai_rule_config.R")
 
-# ── Intent engine ─────────────────────────────────────────────────────────────
-source("R/core/intent_engine.R")     # parse_intent, snapshot_inputs, push_history, restore_last
+# Intent engine
+source("R/core/intent_engine.R")
 
-# ── Chart registry (depends on CHART_MENU_GROUPS from ui_helpers.R) ───────────
-source("R/chart_registry.R")         # CHARTS, CHART_IDS
+# Chart registry (depends on CHART_MENU_GROUPS)
+source("R/chart_registry.R")
+sample_files_written <- ensure_chart_sample_files(overwrite = FALSE)
+log_info("global", "Sample CSV files ready under data/samples (new files: %d)", sample_files_written)
+source("R/core/chart_capability_registry.R")
+CHART_CAP_REG <- load_chart_capability_registry(charts = CHARTS, refresh = FALSE)
+log_info("global", "Chart capability registry ready: %s", chart_capability_registry_path())
+source("R/core/chart_recommender.R")
 
-# ── Plotting core ──────────────────────────────────────────────────────────────
-source("R/plot_core.R")              # COLOR_PALETTES, CHART_THEMES, generate_plot
+# Plot core
+source("R/plot_core.R")
 
-# ── Scene presets (resolve family IDs after CHART_MENU_GROUPS is available) ───
-source("R/bar_scene_presets.R")      # BAR_SCENE_PRESETS
-source("R/scatter_scene_presets.R")  # SCATTER_SCENE_PRESETS
+# Code engines/helpers
+source("R/core/code_engine.R")
+source("R/core/ai_patch_apply.R")
+source("R/core/ai_local_patch_parser.R")
+source("R/core/ai_chat_flow.R")
+source("R/core/ai_chat_helpers.R")
+source("R/core/ai_chat_handlers.R")
+source("R/core/module_shared.R")
+
+# Scene presets
+source("R/bar_scene_presets.R")
+source("R/scatter_scene_presets.R")
 
 BAR_FAMILY_IDS <- unname(unlist(
-  CHART_MENU_GROUPS[[grep("\u67f1\u56fe", names(CHART_MENU_GROUPS), value = TRUE)[1]]]
+  CHART_MENU_GROUPS[[which(vapply(
+    CHART_MENU_GROUPS,
+    function(ids) "bar" %in% ids,
+    logical(1)
+  ))[1]]]
 ))
 SCATTER_FAMILY_IDS <- unname(unlist(
-  CHART_MENU_GROUPS[[grep("\u6563\u70b9\u56fe", names(CHART_MENU_GROUPS), value = TRUE)[1]]]
+  CHART_MENU_GROUPS[[which(vapply(
+    CHART_MENU_GROUPS,
+    function(ids) "scatter_basic" %in% ids,
+    logical(1)
+  ))[1]]]
 ))
 
-# ── LLM API client & preset manager ───────────────────────────────────────────
-source("R/kimi_api.R")               # chat_with_llm, chat_with_kimi, parse_chart_suggestion
-source("R/preset_manager.R")         # save_preset, load_presets, delete_preset, restore_preset_inputs
+# LLM client and preset manager
+source("R/kimi_api.R")
+source("R/preset_manager.R")
 
-# ── UI panel constructors (loaded before ui.R is evaluated) ───────────────────
-source("R/ui/panel_chat.R")          # chat_panel_ui()
-source("R/ui/panel_plot.R")          # plot_preview_card_ui()
-source("R/ui/panel_data.R")          # tab_data_ui()
-source("R/ui/panel_settings.R")      # tab_settings_ui()
-source("R/ui/panel_code.R")          # tab_code_ui()
-source("R/ui/panel_gallery.R")       # tab_gallery_ui()
+# UI panel constructors
+source("R/ui/panel_chat.R")
+source("R/ui/panel_recommend.R")
+source("R/ui/chat_renderers.R")
+source("R/ui/panel_overlay_toolbar.R")
+source("R/ui/panel_overlay_settings.R")
+source("R/ui/panel_plot.R")
+source("R/ui/panel_data.R")
+source("R/ui/panel_settings.R")
+source("R/ui/panel_code.R")
+source("R/ui/panel_gallery.R")
 
-# ── Server modules (loaded before server.R is evaluated) ──────────────────────
-source("R/modules/mod_settings.R")   # init_mod_settings()
-source("R/modules/mod_ai_chat.R")    # init_mod_ai_chat()
-source("R/modules/mod_data.R")       # init_mod_data()
-source("R/modules/mod_plot.R")       # init_mod_plot()
+# Server modules
+source("R/modules/mod_settings.R")
+source("R/modules/mod_ai_chat.R")
+source("R/modules/mod_data.R")
+source("R/modules/mod_code.R")
+source("R/modules/mod_plot.R")
+source("R/modules/mod_overlay.R")
 
-# ── Global utility helpers ─────────────────────────────────────────────────────
-
-# Null-coalescing operator: returns x if non-null/non-empty, else y.
-# Safe for lists (non-null list always wins), vectors, and scalars.
+# Null-coalescing helper
 `%||%` <- function(x, y) {
   if (is.null(x) || length(x) == 0) return(y)
   if (is.list(x)) return(x)
   if (is.na(x[1]) || nchar(as.character(x[1])) == 0) y else x
 }
 
-# Remove ```json ... ``` fenced blocks from LLM response text for display.
+# Remove fenced JSON blocks from LLM responses for display
 strip_json_block <- function(text) {
   trimws(gsub("```json[\\s\\S]*?```", "", text, perl = TRUE))
 }

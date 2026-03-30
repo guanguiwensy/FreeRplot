@@ -68,48 +68,14 @@
 # Each entry: field_name = character vector of all accepted Chinese/English aliases.
 # Matching is case-insensitive.
 
-INTENT_SYNONYMS <- list(
-  plot_title  = c("标题", "题目", "图题", "图名", "图表名", "图表标题",
-                  "title", "chart title", "plot title", "名字", "名称"),
-  x_label     = c("x轴", "x轴标签", "x轴标题", "x轴名", "x轴名称",
-                  "横轴", "横轴标签", "横坐标", "x坐标轴",
-                  "x label", "xlabel", "x-label"),
-  y_label     = c("y轴", "y轴标签", "y轴标题", "y轴名", "y轴名称",
-                  "纵轴", "纵轴标签", "纵坐标", "y坐标轴",
-                  "y label", "ylabel", "y-label"),
-  # Numeric chart-option aliases (matched only if that opt exists for current chart)
-  alpha       = c("透明度", "alpha", "不透明度", "透明"),
-  point_size  = c("点大小", "点尺寸", "点的大小", "散点大小",
-                  "point size", "pointsize", "point_size"),
-  bar_width   = c("柱宽", "条宽", "bar width", "barwidth"),
-  line_size   = c("线宽", "线条粗细", "线条宽度", "line width", "linewidth"),
-  label_size  = c("标签字号", "标签大小", "label size", "labelsize"),
-  font_size   = c("字号", "字体大小", "font size", "fontsize"),
-  # Boolean chart-option aliases
-  show_labels = c("标签", "数值标签", "数据标签", "label", "labels", "data label"),
-  show_smooth = c("趋势线", "拟合线", "回归线", "smooth", "trend", "trendline"),
-  show_legend = c("图例", "legend")
-)
-
-# Verbs that signal "set X to VALUE"
-CHANGE_VERBS <- c(
-  "改成", "改为", "设为", "设置为", "换成", "换为", "变成",
-  "调整为", "修改为", "更改为", "替换为", "替换成",
-  "用", "叫", "命名为", "取名", "起名",
-  "=", "：", ":", "->", "→", "——"
-)
-
-# Words/phrases that unambiguously signal "undo"
-UNDO_TRIGGERS <- c("撤销", "回退", "undo", "取消上一步",
-                   "恢复上一次", "撤回", "还原")
-
-# Words that signal "turn ON" a boolean option
-BOOL_ON  <- c("开", "开启", "显示", "打开", "on", "true", "yes",
-              "要", "需要", "加上", "加", "启用")
-# Words that signal "turn OFF"
-BOOL_OFF <- c("关", "关闭", "隐藏", "去掉", "去除", "off", "false",
-              "no", "不要", "不显示", "禁用", "移除")
-
+INTENT_SYNONYMS <- ai_match_rule_get(c("intent_engine", "synonyms"), default = list())
+CHANGE_VERBS <- ai_match_rule_vector(c("intent_engine", "change_verbs"), default = character(0))
+UNDO_TRIGGERS <- ai_match_rule_vector(c("intent_engine", "undo_triggers"), default = character(0))
+BOOL_ON <- ai_match_rule_vector(c("intent_engine", "bool_on"), default = character(0))
+BOOL_OFF <- ai_match_rule_vector(c("intent_engine", "bool_off"), default = character(0))
+AXIS_ALIASES <- ai_match_rule_get(c("intent_engine", "axis_aliases"), default = list())
+AXIS_AUTO_PATTERNS <- ai_match_rule_get(c("intent_engine", "axis_auto_patterns"), default = list())
+NUMERIC_SETTING_ALIASES <- ai_match_rule_get(c("intent_engine", "numeric_setting_aliases"), default = list())
 
 # ── Low-level helpers ─────────────────────────────────────────────────────────
 
@@ -142,6 +108,7 @@ BOOL_OFF <- c("关", "关闭", "隐藏", "去掉", "去除", "off", "false",
 # Given a field's aliases and raw text, find the value after a change-verb.
 # Returns the raw value string, or NULL if no match.
 .match_set_value <- function(txt, aliases) {
+  if (length(CHANGE_VERBS) == 0 || length(aliases) == 0) return(NULL)
   verb_pat <- paste(vapply(CHANGE_VERBS, .re_escape, character(1)), collapse = "|")
   for (alias in aliases) {
     pattern <- paste0(
@@ -161,6 +128,7 @@ BOOL_OFF <- c("关", "关闭", "隐藏", "去掉", "去除", "off", "false",
 # Uses word boundaries (\b) for pure-ASCII words to avoid false positives
 # like "on" matching inside "Month", "font", etc.
 .match_bool <- function(txt, aliases) {
+  if (length(aliases) == 0) return(NULL)
   .gpat <- function(w) {
     if (grepl("^[A-Za-z]+$", w))
       paste0("(?i)\\b", .re_escape(w), "\\b")
@@ -217,12 +185,7 @@ extract_intent_local <- function(user_text, chart_id) {
   # ── 3. Axis range ("x范围 0到100" / "y range 0~50") ──────────────────────
   for (axis in c("x", "y")) {
     if (!is.null(common[[paste0(axis, "_min")]])) next  # already matched
-    axis_pats <- if (axis == "x")
-      c("x坐标范围", "x轴范围", "x范围", "x range", "x坐标", "x轴",
-        "横坐标范围", "横轴范围", "横坐标", "横轴", "x-axis", "x axis")
-    else
-      c("y坐标范围", "y轴范围", "y范围", "y range", "y坐标", "y轴",
-        "纵坐标范围", "纵轴范围", "纵坐标", "纵轴", "y-axis", "y axis")
+    axis_pats <- as.character(AXIS_ALIASES[[axis]] %||% character(0))
     for (pat in axis_pats) {
       if (!grepl(pat, txt, ignore.case = TRUE, perl = TRUE)) next
       after <- sub(paste0("(?i).*", .re_escape(pat)), "", txt, perl = TRUE)
@@ -236,21 +199,19 @@ extract_intent_local <- function(user_text, chart_id) {
       }
     }
     # "x范围自动" → reset to auto
-    if (grepl(paste0("(?i)", axis, ".*自动.*范围|", axis, "范围.*自动"), txt, perl = TRUE)) {
+    auto_pat <- as.character(AXIS_AUTO_PATTERNS[[axis]] %||% "")
+    if (nzchar(auto_pat) && grepl(auto_pat, txt, perl = TRUE)) {
       common[[paste0(axis, "_range_mode")]] <- "auto"
       hits <- c(hits, paste0(axis, "_range_auto"))
     }
   }
 
   # ── 4. Width / height / DPI ───────────────────────────────────────────────
-  for (cfg in list(
-    list(field = "plot_width_in",  pats = c("宽度", "宽", "width")),
-    list(field = "plot_height_in", pats = c("高度", "高", "height")),
-    list(field = "plot_dpi",       pats = c("dpi", "分辨率", "清晰度"))
-  )) {
-    val <- .match_set_value(txt, cfg$pats)
+  for (field in names(NUMERIC_SETTING_ALIASES)) {
+    pats <- as.character(NUMERIC_SETTING_ALIASES[[field]] %||% character(0))
+    val <- .match_set_value(txt, pats)
     n   <- if (!is.null(val)) .parse_number(val) else NA_real_
-    if (!is.na(n)) { common[[cfg$field]] <- n; hits <- c(hits, cfg$field) }
+    if (!is.na(n)) { common[[field]] <- n; hits <- c(hits, field) }
   }
 
   # ── 5. Theme / palette (exact name matching) ──────────────────────────────
@@ -507,6 +468,7 @@ parse_intent <- function(user_text, chart_id, api_key = NULL, model = "moonshot-
 snapshot_inputs <- function(input) {
   list(
     chart_id       = input$chart_type_select,
+    plot_code      = input$plot_code %||% "",
     plot_title     = input$plot_title     %||% "",
     x_label        = input$x_label        %||% "",
     y_label        = input$y_label        %||% "",
@@ -539,6 +501,10 @@ restore_last <- function(rv, session) {
   snap <- rv$patch_history[[1]]
   rv$patch_history <- rv$patch_history[-1]
 
+  if (!is.null(snap$chart_id) && nzchar(snap$chart_id)) {
+    updateSelectInput(session, "chart_type_select", selected = snap$chart_id)
+  }
+
   updateTextInput(session, "plot_title",    value = snap$plot_title    %||% "")
   updateTextInput(session, "x_label",       value = snap$x_label       %||% "")
   updateTextInput(session, "y_label",       value = snap$y_label       %||% "")
@@ -560,6 +526,15 @@ restore_last <- function(rv, session) {
     updateSelectInput(session, "y_range_mode", selected = snap$y_range_mode)
   if (!is.null(snap$y_min)) updateNumericInput(session, "y_min", value = snap$y_min)
   if (!is.null(snap$y_max)) updateNumericInput(session, "y_max", value = snap$y_max)
+
+  # Code-first undo: restore editor text, then re-run to refresh plot.
+  has_code <- !is.null(snap$plot_code) && nzchar(trimws(snap$plot_code))
+  if (has_code) {
+    shinyjs::delay(220, shinyAce::updateAceEditor(session, "plot_code", value = snap$plot_code))
+    shinyjs::delay(420, shinyjs::click("run_code_btn"))
+  } else {
+    shinyjs::delay(250, shinyjs::click("generate_btn"))
+  }
 
   invisible(TRUE)
 }
