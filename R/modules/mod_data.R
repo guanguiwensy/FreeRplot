@@ -3,9 +3,12 @@
 # Purpose: Data server module for the "Data" tab.
 #          Handles sample-data switching, file import (.csv / .tsv / .xlsx),
 #          Excel/WPS paste import, lightweight schema validation, source
-#          tracking for the active table, and the editable rhandsontable grid.
+#          tracking for the active table, the editable rhandsontable grid,
+#          and the column-mapping modal triggered when a user switches chart
+#          type while user-uploaded / pasted data is active.
 #
 # Depends: R/utils/logger.R  (log_debug, log_info, log_warn, log_error, safe_run)
+#          shinyjs            (delay + click for post-mapping auto-generate)
 #
 # Exported functions:
 #   init_mod_data(input, output, session, rv)
@@ -15,17 +18,30 @@
 #       output  [Shiny output]
 #       session [Shiny session]
 #       rv      [reactiveValues]  reads/writes:
-#                 rv$current_data
-#                 rv$current_data_source
+#                 rv$current_data              active data.frame
+#                 rv$current_data_source       "none" | "sample" | "upload" | "paste"
+#                 rv$current_data_file         path to current CSV on disk (or NULL)
+#                 rv$preserve_data_on_chart_change  flag: skip sample-swap on next
+#                                                   chart_type_select event
 #
 # Key observers / outputs:
-#   observeEvent(input$chart_type_select)  default: switches to chart sample data
-#   observeEvent(input$load_sample_btn)    explicit sample data reload
-#   observeEvent(input$upload_file)        file import -> validate -> rv$current_data
-#   observeEvent(input$paste_import_btn)   pasted table -> validate -> rv$current_data
-#   output$data_source_ui                  current data-source badge
-#   output$data_requirements_ui            current chart field summary
-#   output$data_table                      editable grid from rv$current_data
+#   observeEvent(input$chart_type_select)   when user data present: shows column-
+#                                           mapping modal; otherwise loads sample data
+#   observeEvent(input$apply_col_mapping)   applies modal selections: renames
+#                                           rv$current_data columns, auto-generates
+#   observeEvent(input$load_sample_btn)     explicit sample data reload
+#   observeEvent(input$upload_file)         file import -> validate -> rv$current_data
+#   observeEvent(input$paste_import_btn)    pasted table -> validate -> rv$current_data
+#   output$data_source_ui                   current data-source badge
+#   output$data_requirements_ui             current chart field summary
+#   output$data_table                       editable rhandsontable (horizontal scroll)
+#
+# Internal helpers (private to local scope):
+#   .show_col_mapping_modal(chart_id)       builds and shows the mapping modal
+#   .column_specs_for_chart(chart_id)       parses chart$columns into spec list
+#   .sample_data_for_chart(chart_id)        returns chart's sample_data or NULL
+#   .sample_file_for_chart(chart_id)        persists sample data to temp CSV path
+#   .persist_runtime_csv(df, source)        writes df to temp file, returns path
 # =============================================================================
 
 local({
@@ -56,11 +72,17 @@ local({
   }
 
   .sample_data_for_chart <- function(chart_id) {
-    chart <- CHARTS[[chart_id]]
-    if (is.null(chart) || !is.data.frame(chart$sample_data)) {
-      stop(sprintf("Chart '%s' has no sample data.", chart_id))
+    path <- file.path(APP_DIR, "data", "samples", paste0(chart_id, ".csv"))
+    if (!file.exists(path)) {
+      stop(sprintf("Chart '%s': sample CSV not found at %s", chart_id, path))
     }
-    .as_plain_data_frame(chart$sample_data)
+    df <- tryCatch(
+      utils::read.csv(path, stringsAsFactors = FALSE, check.names = FALSE),
+      error = function(e) stop(sprintf(
+        "Chart '%s': failed to read sample CSV: %s", chart_id, e$message
+      ))
+    )
+    .as_plain_data_frame(df)
   }
 
   .sample_file_for_chart <- function(chart_id) {
@@ -153,10 +175,18 @@ local({
 
     specs <- Filter(Negate(is.null), specs)
 
-    if (length(specs) == 0L && !is.null(chart$sample_data)) {
-      specs <- lapply(names(chart$sample_data), function(name) {
-        list(name = name, optional = FALSE, numeric = FALSE, desc = "")
-      })
+    if (length(specs) == 0L) {
+      # Fallback: derive column names from sample CSV header
+      csv_path <- file.path(APP_DIR, "data", "samples", paste0(chart_id, ".csv"))
+      if (file.exists(csv_path)) {
+        csv_cols <- tryCatch(
+          names(utils::read.csv(csv_path, nrows = 0L, check.names = FALSE)),
+          error = function(e) character(0)
+        )
+        specs <- lapply(csv_cols, function(name) {
+          list(name = name, optional = FALSE, numeric = FALSE, desc = "")
+        })
+      }
     }
 
     specs
@@ -210,6 +240,9 @@ local({
       return(list(ok = FALSE, message = "检测到空列名，请先补齐表头后再导入。"))
     }
 
+    # Only check minimum column count — column names are kept as-is.
+    # Role assignment (x/y/group/…) is handled by the Settings panel selectors,
+    # not by renaming rv$current_data.
     specs <- .column_specs_for_chart(chart_id)
     required_specs <- Filter(function(spec) !isTRUE(spec$optional), specs)
 
@@ -217,53 +250,13 @@ local({
       return(list(
         ok = FALSE,
         message = sprintf(
-          "当前图表至少需要 %d 列数据。可先点击“下载示例数据”查看格式。",
+          "当前图表至少需要 %d 列数据。可先点击\u201c下载示例数据\u201d查看格式。",
           length(required_specs)
         )
       ))
     }
 
-    aligned <- .align_import_columns(df, chart_id)
-    if (!isTRUE(aligned$ok)) return(aligned)
-    df <- aligned$data
-
-    required_names <- vapply(required_specs, `[[`, character(1), "name")
-    missing_names <- setdiff(required_names, names(df))
-    if (length(missing_names) > 0L) {
-      return(list(
-        ok = FALSE,
-        message = sprintf(
-          "当前图表缺少必需列：%s。可先点击“下载示例数据”查看格式。",
-          paste(missing_names, collapse = "、")
-        )
-      ))
-    }
-
-    numeric_specs <- Filter(function(spec) {
-      !isTRUE(spec$optional) && isTRUE(spec$numeric) && spec$name %in% names(df)
-    }, specs)
-
-    if (length(numeric_specs) > 0L) {
-      bad_numeric <- vapply(numeric_specs, function(spec) {
-        values <- suppressWarnings(as.numeric(df[[spec$name]]))
-        !any(is.finite(values))
-      }, logical(1))
-
-      if (any(bad_numeric)) {
-        bad_names <- vapply(numeric_specs[bad_numeric], `[[`, character(1), "name")
-        return(list(
-          ok = FALSE,
-          message = sprintf("以下列需要为数值列：%s。", paste(bad_names, collapse = "、"))
-        ))
-      }
-    }
-
-    list(
-      ok = TRUE,
-      data = df,
-      renamed = isTRUE(aligned$renamed),
-      mapping_note = aligned$mapping_note %||% NULL
-    )
+    list(ok = TRUE, data = df, renamed = FALSE, mapping_note = NULL)
   }
 
   .read_delimited_with_fallback <- function(path, sep, format_label) {
@@ -496,6 +489,59 @@ local({
       )
     })
 
+    # Helper: show column-mapping modal for a given chart + current data
+    .show_col_mapping_modal <- function(chart_id) {
+      specs     <- .column_specs_for_chart(chart_id)
+      if (length(specs) == 0L) return(invisible(NULL))
+      data_cols <- names(rv$current_data)
+      chart_label <- CHARTS[[chart_id]]$label %||% chart_id
+
+      inputs <- lapply(seq_along(specs), function(i) {
+        spec <- specs[[i]]
+        flag <- if (isTRUE(spec$optional)) "(\u53ef\u9009)" else "(\u5fc5\u9700)"
+        lbl  <- paste0(spec$name, " ", flag)
+        if (nzchar(spec$desc)) lbl <- paste0(lbl, " - ", spec$desc)
+
+        # Auto-guess: exact match first, then case-insensitive, then positional
+        # Optional fields skip positional guessing and default to empty
+        guessed <- if (spec$name %in% data_cols) {
+          spec$name
+        } else {
+          m <- data_cols[tolower(data_cols) == tolower(spec$name)]
+          if (length(m) > 0L) {
+            m[1L]
+          } else if (!isTRUE(spec$optional) && i <= length(data_cols)) {
+            data_cols[i]
+          } else {
+            ""
+          }
+        }
+
+        selectInput(
+          inputId   = paste0("col_map_", i),
+          label     = lbl,
+          choices   = c("-- \u4e0d\u6620\u5c04 --" = "", data_cols),
+          selected  = guessed,
+          width     = "100%",
+          selectize = FALSE
+        )
+      })
+
+      showModal(modalDialog(
+        title = paste0("\u5217\u6620\u5c04\u8bbe\u7f6e - ", chart_label),
+        tags$p(class = "text-muted mb-3",
+               "\u8bf7\u4e3a\u56fe\u8868\u5404\u5b57\u6bb5\u6307\u5b9a\u6570\u636e\u8868\u4e2d\u5bf9\u5e94\u7684\u5217\uff0c\u672a\u9009\u7684\u53ef\u9009\u5b57\u6bb5\u5c06\u88ab\u5ffd\u7565\u3002"),
+        do.call(tagList, inputs),
+        footer = tagList(
+          modalButton("\u53d6\u6d88"),
+          actionButton("apply_col_mapping", "\u5e94\u7528\u6620\u5c04",
+                       class = "btn btn-primary", icon = icon("check"))
+        ),
+        easyClose = TRUE,
+        size = "m"
+      ))
+    }
+
     observeEvent(input$chart_type_select, {
       req(input$chart_type_select)
       chart_id <- input$chart_type_select
@@ -503,40 +549,71 @@ local({
       preserve_once <- isTRUE(rv$preserve_data_on_chart_change)
       rv$preserve_data_on_chart_change <- FALSE
 
-      has_data <- is.data.frame(rv$current_data) && nrow(rv$current_data) > 0 && ncol(rv$current_data) > 0
-      if (isTRUE(preserve_once) && isTRUE(has_data)) {
-        .capture_unsaved_table_edits(input, rv)
-        log_info(
-          .MODULE,
-          "chart switched to '%s'; preserving current data source='%s' (recommendation path)",
-          chart_id,
-          rv$current_data_source %||% "unknown"
-        )
+      has_user_data <- is.data.frame(rv$current_data) &&
+                       nrow(rv$current_data) > 0 &&
+                       isTRUE(rv$current_data_source %in% c("upload", "paste"))
+
+      # User uploaded/pasted data: show mapping dialog instead of replacing with sample
+      if (isTRUE(has_user_data) && !isTRUE(preserve_once)) {
+        log_info(.MODULE, "chart switched to '%s'; user data present, showing column mapping", chart_id)
+        .show_col_mapping_modal(chart_id)
         return()
       }
 
+      # AI recommendation path: preserve data as-is
+      has_data <- is.data.frame(rv$current_data) && nrow(rv$current_data) > 0
+      if (isTRUE(preserve_once) && isTRUE(has_data)) {
+        .capture_unsaved_table_edits(input, rv)
+        log_info(.MODULE, "chart switched to '%s'; preserving current data (recommendation path)", chart_id)
+        return()
+      }
+
+      # Default: load sample data for the selected chart
       if (isTRUE(preserve_once) && !isTRUE(has_data)) {
-        log_warn(.MODULE, "chart switched to '%s'; preserve requested but no active data, fallback to sample", chart_id)
+        log_warn(.MODULE, "chart switched to '%s'; preserve requested but no data, fallback to sample", chart_id)
       } else {
         log_debug(.MODULE, "chart switched to '%s', loading sample data", chart_id)
       }
-      rv$current_data <- .sample_data_for_chart(chart_id)
+      rv$current_data        <- .sample_data_for_chart(chart_id)
       rv$current_data_source <- "sample"
-      rv$current_data_file <- .sample_file_for_chart(chart_id)
-      return()
-
-      log_info(
-        .MODULE,
-        "chart switched to '%s'; preserving current data source='%s'",
-        chart_id,
-        current_source
-      )
-      showNotification(
-        "已保留当前数据；如需切换为该图表示例数据，请点击“加载示例数据”。",
-        type = "message",
-        duration = 3
-      )
+      rv$current_data_file   <- .sample_file_for_chart(chart_id)
     }, ignoreNULL = TRUE)
+
+    # Apply column mapping from modal.
+    # Instead of renaming rv$current_data (which would corrupt the display table,
+    # settings panel, and code editor), we push the user's choices into the
+    # Settings panel selectors (map_x_col / map_y_col / …).
+    # shared_collect_column_mapping() already reads those inputs, so the chart
+    # renderer will use the correct columns without touching the stored data.
+    observeEvent(input$apply_col_mapping, {
+      req(is.data.frame(rv$current_data))
+      chart_id <- isolate(input$chart_type_select) %||% ""
+      specs    <- .column_specs_for_chart(chart_id)
+      df       <- isolate(rv$current_data)
+
+      # Map spec role name → Settings input id
+      role_to_input <- c(
+        x     = "map_x_col",
+        y     = "map_y_col",
+        size  = "map_size_col",
+        group = "map_group_col",
+        label = "map_label_col"
+      )
+
+      for (i in seq_along(specs)) {
+        src_col  <- input[[paste0("col_map_", i)]]
+        role     <- tolower(trimws(specs[[i]]$name))
+        input_id <- role_to_input[[role]]
+        if (!is.null(input_id) && !is.null(src_col) && src_col %in% names(df)) {
+          updateSelectInput(session, input_id, selected = src_col)
+        }
+      }
+
+      removeModal()
+      showNotification("\u5217\u6620\u5c04\u5df2\u5e94\u7528\uff0c\u6b63\u5728\u751f\u6210\u56fe\u8868\u2026", type = "message", duration = 3)
+      log_info(.MODULE, "column mapping applied for chart '%s' (settings selectors updated)", chart_id)
+      shinyjs::delay(300, shinyjs::click("generate_btn"))
+    })
 
     observeEvent(input$load_sample_btn, {
       req(input$chart_type_select)
@@ -549,8 +626,8 @@ local({
     })
 
     observeEvent(input$upload_file, {
-      req(input$upload_file, input$chart_type_select)
-      chart_id <- input$chart_type_select
+      req(input$upload_file)
+      chart_id <- input$chart_type_select %||% ""
       file_name <- input$upload_file$name %||% input$upload_file$datapath %||% "unknown"
 
       log_info(.MODULE, "upload_file: chart='%s' file='%s'", chart_id, file_name)
@@ -602,8 +679,7 @@ local({
     })
 
     observeEvent(input$paste_import_btn, {
-      req(input$chart_type_select)
-      chart_id <- input$chart_type_select
+      chart_id <- input$chart_type_select %||% ""
       txt <- trimws(input$paste_data_area %||% "")
 
       if (!nzchar(txt)) {
@@ -666,8 +742,8 @@ local({
       rhandsontable(
         rv$current_data,
         rowHeaders = TRUE,
-        stretchH = "all",
-        overflow = "visible",
+        stretchH = "last",
+        overflow = "hidden",
         colHeaders = names(rv$current_data)
       ) |>
         hot_context_menu(allowRowEdit = TRUE, allowColEdit = FALSE)

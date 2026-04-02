@@ -198,6 +198,30 @@ body {
   padding-top: 6px;
 }
 
+/* ── Recommendation preview grid ─────────────────────────────────── */
+.rec-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  padding: 4px 2px;
+}
+
+.rec-preview-card {
+  border: 1px solid #dbe5f1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  transition: box-shadow 0.15s;
+}
+
+.rec-preview-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 80, 200, 0.12);
+}
+
+.recommend-placeholder {
+  padding: 24px 16px;
+}
+
 .pane-right-shell {
   --pane-top-height: 52%;
   flex: 1 1 auto;
@@ -1139,12 +1163,9 @@ body.pane-resizing * {
   box-shadow: none;
 }
 
-.data-table-shell > .html-widget,
-.data-table-shell > .rhandsontable,
 .data-table-shell .rhandsontable,
 .data-table-shell .handsontable {
   height: auto !important;
-  width: 100% !important;
   min-width: 0;
 }
 

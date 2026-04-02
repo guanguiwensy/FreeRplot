@@ -15,9 +15,10 @@
 #   name_en       [chr]  display name (English)
 #   category      [chr]  group label
 #   plot_fn       [function(data, options)]  draws and returns a ggplot/circos object
-#   sample_data   [data.frame]              default demo data
 #   options_def   [list]  option descriptor objects (see ui_helpers.R)
 #   code_template [function(options) | function(options, data)]  generates R code string
+#
+# Note: sample data is stored in data/samples/<id>.csv — not embedded in chart_def.
 #
 # Internal functions:
 #   .load_charts_from_files(charts_dir)
@@ -78,29 +79,6 @@
 CHARTS <- .order_charts_by_menu(.load_charts_from_files())
 CHART_IDS <- names(CHARTS)
 
-ensure_chart_sample_files <- function(charts = CHARTS,
-                                      out_dir = file.path(APP_DIR, "data", "samples"),
-                                      overwrite = FALSE) {
-  if (!dir.exists(out_dir)) {
-    dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-  }
-
-  written <- 0L
-
-  for (id in names(charts)) {
-    chart <- charts[[id]]
-    sample_df <- chart$sample_data
-    if (!is.data.frame(sample_df) || nrow(sample_df) == 0 || ncol(sample_df) == 0) next
-
-    target <- file.path(out_dir, paste0(id, ".csv"))
-    if (!isTRUE(overwrite) && file.exists(target)) next
-
-    utils::write.csv(sample_df, target, row.names = FALSE, fileEncoding = "UTF-8")
-    written <- written + 1L
-  }
-
-  written
-}
 
 build_system_prompt <- function() {
   chart_lines <- paste(vapply(CHARTS, function(c) {

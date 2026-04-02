@@ -1,4 +1,4 @@
-"label","value","Total Area","Average Size","%Area","Mean","IntDen"
+"Slice","x","y","size","%Area","Mean","IntDen"
 "AGS IGF2BP1 .tif",42,46.393,1.105,29.534,44.255,11.805
 "AGS IGF2BP1-2.tif",63,41.279,0.655,26.279,36.576,7.649
 "AGS IGF2BP1-3.tif",111,46.041,0.415,29.31,40.898,5.701

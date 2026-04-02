@@ -28,12 +28,7 @@ chart_def <- list(id = "bar_count", name = "计数柱状图", name_en = "Bar Cha
             options)
     }, category = "柱图家族", description = "自动统计各类别出现次数并绘制柱图，无需预先汇总", 
     best_for = "类别频率分布、问卷统计、样本构成", 
-    columns = "category(类别列，自动计数)", sample_data = structure(list(
-        education = c("研究生", "本科生", "研究生", 
-        "专科生", "本科生", "高中", "研究生", "本科生", 
-        "专科生", "本科生", "研究生", "高中", "专科生", 
-        "本科生", "研究生", "本科生", "研究生", "专科生"
-        )), class = "data.frame", row.names = c(NA, -18L)), options_def = list(
+    columns = "category(类别列，自动计数)", options_def = list(
         list(id = "fill_color", label = "填充颜色", type = "color", 
             group = "basic", default = "#4ECDC4"), list(id = "orientation", 
             label = "方向", type = "select", group = "basic", 

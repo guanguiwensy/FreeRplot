@@ -114,7 +114,13 @@ init_mod_plot <- function(input, output, session, rv) {
   output$download_csv <- downloadHandler(
     filename = function() paste0(input$chart_type_select, "_sample_data.csv"),
     content = function(file) {
-      write.csv(CHARTS[[input$chart_type_select]]$sample_data, file, row.names = FALSE)
+      chart_id  <- input$chart_type_select
+      src_path  <- file.path(APP_DIR, "data", "samples", paste0(chart_id, ".csv"))
+      if (file.exists(src_path)) {
+        file.copy(src_path, file)
+      } else {
+        utils::write.csv(data.frame(), file, row.names = FALSE)
+      }
     }
   )
 

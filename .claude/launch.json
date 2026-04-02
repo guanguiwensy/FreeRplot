@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "R Shiny App",
-      "runtimeExecutable": "Rscript",
+      "runtimeExecutable": "C:/Program Files/R/R-4.5.2/bin/Rscript.exe",
       "runtimeArgs": ["-e", "setwd('D:/coding/r-plot-ai'); shiny::runApp('.', port=3838, launch.browser=FALSE)"],
       "port": 3838
     }

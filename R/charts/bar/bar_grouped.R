@@ -45,14 +45,7 @@ chart_def <- list(id = "bar_grouped", name = "分组柱状图", name_en = "Group
             options)
     }, category = "柱图家族", description = "多组数据并列展示，便于同一类别下不同组的直接对比", 
     best_for = "多组对比、产品/时间/地区并列比较", 
-    columns = "x(类别), y(数值), group(分组变量)", sample_data = structure(list(
-        quarter = c("Q1", "Q2", "Q3", "Q4", "Q1", "Q2", "Q3", 
-        "Q4", "Q1", "Q2", "Q3", "Q4"), sales = c(85, 92, 78, 
-        105, 70, 88, 95, 82, 55, 62, 70, 78), product = c("产品A", 
-        "产品A", "产品A", "产品A", "产品B", "产品B", 
-        "产品B", "产品B", "产品C", "产品C", "产品C", 
-        "产品C")), class = "data.frame", row.names = c(NA, 
-    -12L)), options_def = list(list(id = "color_palette", label = "配色方案", 
+    columns = "x(类别), y(数值), group(分组变量)", options_def = list(list(id = "color_palette", label = "配色方案", 
         type = "select", group = "basic", choices = c(默认 = "默认", 
         商务蓝 = "商务蓝", 自然绿 = "自然绿", 活力橙 = "活力橙", 
         粉紫系 = "粉紫系"), default = "默认"), list(id = "orientation", 

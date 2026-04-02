@@ -18,16 +18,7 @@ chart_def <- list(id = "dna_many", name = "多序列比对图", name_en = "Multi
             filename = tempfile(fileext = ".png"), return = TRUE)
     }, category = "基因序列", description = "多条 DNA/RNA 序列并排展示，直观比较不同读取间的碱基差异", 
     best_for = "多样本序列比对、reads 可视化、家系序列比较", 
-    columns = "sequence(每行一条 DNA/RNA 序列字符串)", 
-    sample_data = structure(list(sequence = c("GGCGGCGGCGGCGGCGGCGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGA", 
-    "GGCGGCGGCGGCGGCGGCGGCGGCGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGA", 
-    "GGCGGCGGCGGCGGCGGCGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGA", 
-    "GGCGGCGGCGGCGGCGGCGGCGGCGGCGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGA", 
-    "GGCGGCGGCGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGA", 
-    "GGCGGCGGCGGCGGCGGCGGCGGCGGCGGCGGAGGAGGAGGCGGCGGAGGAGGAGGCGGCGGA", 
-    "GGCGGCGGCGGCGGCGGCGGCGGCGGCGGCGGCGGCGGAGGAGGAGGCGGCGGAGGAGGAGGCGGCGGA", 
-    "GGCGGCGGCGGCGGCGGCGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGA"
-    )), class = "data.frame", row.names = c(NA, -8L)), options_def = list(
+    columns = "sequence(每行一条 DNA/RNA 序列字符串)", options_def = list(
         list(id = "dna_palette", label = "碱基配色", type = "select", 
             group = "basic", choices = c(高亮深色 = "bright_deep", 
             高亮浅色 = "bright_light", 柔和 = "pastel", 

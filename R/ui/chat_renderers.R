@@ -1,7 +1,23 @@
 # =============================================================================
 # File   : R/ui/chat_renderers.R
-# Purpose: UI renderers for AI chat messages, suggestions, intent preview,
-#          and chart recommendation panel.
+# Purpose: UI renderers for the left-column AI chat and recommendation panel.
+#          Registered via register_ai_chat_renderers() called from mod_ai_chat.
+#
+# Outputs registered:
+#   output$chat_messages_ui        chat history (user + assistant bubbles)
+#   output$suggestion_ui           AI suggestion card with accept/dismiss
+#   output$intent_preview_ui       medium-confidence intent confirm/cancel card
+#   output$chart_recommend_ui      recommendation panel body:
+#                                    • placeholder when no recs yet
+#                                    • card grid (rec-preview-grid) after recs run:
+#                                      each card shows a base64 PNG preview
+#                                      rendered from user data + chart spec mapping,
+#                                      chart name, score, and a "使用" button
+#
+# Depends:
+#   rv$chart_recommendations       list of recommendation objects
+#   rv$chart_recommend_previews    chart_id → base64 PNG (written by
+#                                  ai_chat_handlers.R run_recommendations)
 # =============================================================================
 
 register_ai_chat_renderers <- function(input, output, session, rv) {
@@ -205,109 +221,103 @@ register_ai_chat_renderers <- function(input, output, session, rv) {
   })
 
   output$chart_recommend_ui <- renderUI({
-    recs <- rv$chart_recommendations
-    profile <- rv$chart_recommend_profile %||% list()
+    recs     <- rv$chart_recommendations
+    previews <- rv$chart_recommend_previews %||% list()
 
-    profile_block <- div(
-      class = "recommend-summary mb-2",
-      tags$small(
-        class = "text-muted",
-        sprintf(
-          "Data summary: rows=%d, cols=%d, numeric=%d, datetime=%d, categorical/text=%d",
-          as.integer(profile$rows %||% 0L),
-          as.integer(profile$cols %||% 0L),
-          length(profile$numeric_cols %||% character(0)),
-          length(profile$datetime_cols %||% character(0)),
-          length(profile$categorical_cols %||% character(0))
-        )
-      )
-    )
-
+    # ── Placeholder when no recommendation has been run yet ──────────────────
     if (is.null(recs) || length(recs) == 0) {
       return(
         div(
-          class = "recommend-placeholder",
-          profile_block,
-          tags$small(class = "text-muted", "Click `图形推荐` to compute chart candidates from registry rules.")
+          class = "recommend-placeholder text-center py-4",
+          tags$div(
+            style = "font-size:2rem; color:#ccc; margin-bottom:8px;",
+            icon("chart-bar")
+          ),
+          tags$p(
+            class = "text-muted mb-1",
+            "\u70b9\u51fb\u300c\u56fe\u5f62\u63a8\u8350\u300d\u6309\u9215\u5f00\u59cb\u5206\u6790"
+          ),
+          tags$small(
+            class = "text-muted",
+            "\u8f6f\u4ef6\u5c06\u6839\u636e\u6570\u636e\u7279\u5f81\u63a8\u8350\u6700\u9002\u5408\u7684\u56fe\u8868\u5e76\u751f\u6210\u9884\u89c8\u56fe"
+          )
         )
       )
     }
 
-    status_label <- function(s) {
-      switch(
-        s,
-        recommended = "Recommended",
-        available = "Available",
-        not_recommended = "Not Recommended",
-        "Unknown"
-      )
-    }
+    # ── Build one preview card per recommendation ─────────────────────────────
+    build_card <- function(rec) {
+      id    <- rec$chart_id   %||% ""
+      nm    <- rec$chart_name %||% id
+      score <- as.integer(rec$score %||% 0L)
+      rs    <- rec$reason     %||% character(0)
+      b64   <- previews[[id]]
 
-    status_class <- function(s) {
-      switch(
-        s,
-        recommended = "badge bg-success",
-        available = "badge bg-primary",
-        not_recommended = "badge bg-secondary",
-        "badge bg-light text-dark"
-      )
-    }
+      img_block <- if (!is.null(b64) && nzchar(b64)) {
+        tags$img(
+          src   = paste0("data:image/png;base64,", b64),
+          alt   = nm,
+          style = paste0(
+            "width:100%; height:140px; object-fit:contain;",
+            " background:#fafafa; border-radius:4px;",
+            " display:block; margin-bottom:6px;"
+          )
+        )
+      } else {
+        div(
+          style = paste0(
+            "width:100%; height:140px; background:#f5f5f5;",
+            " border-radius:4px; margin-bottom:6px;",
+            " display:flex; align-items:center; justify-content:center;"
+          ),
+          tags$small(class = "text-muted", "\u65e0\u9884\u89c8")
+        )
+      }
 
-    build_item <- function(rec) {
-      id <- rec$chart_id %||% ""
-      nm <- rec$chart_name %||% id
-      rs <- rec$reason %||% character(0)
-      score <- as.integer(rec$score %||% 0)
-      status <- rec$status %||% "available"
-      reason_id <- paste0("rec_reason_box_", id)
+      reason_block <- if (length(rs) > 0) {
+        tags$details(
+          style = "margin-top:4px;",
+          tags$summary(
+            style = "font-size:0.75rem; color:#888; cursor:pointer;",
+            "\u63a8\u8350\u7406\u7531"
+          ),
+          tags$ul(
+            style = "font-size:0.73rem; color:#666; margin:4px 0 0 12px; padding:0;",
+            lapply(rs, function(x) tags$li(x))
+          )
+        )
+      } else NULL
 
       div(
-        class = "recommend-item",
+        class = "rec-preview-card",
+        img_block,
         div(
-          class = "d-flex align-items-center justify-content-between gap-2 flex-wrap",
+          class = "d-flex align-items-start justify-content-between gap-1",
           div(
-            class = "d-flex align-items-center gap-2 flex-wrap",
-            tags$strong(nm),
-            tags$span(class = status_class(status), status_label(status)),
-            tags$span(class = "text-muted", sprintf("Score %d", score))
-          ),
-          div(
-            class = "d-flex align-items-center gap-2",
-            actionButton(
-              paste0("rec_select_", id),
-              "选择",
-              class = "btn btn-sm btn-outline-primary"
+            style = "min-width:0; flex:1;",
+            tags$strong(
+              style = "font-size:0.82rem; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;",
+              nm
             ),
-            actionButton(
-              paste0("rec_reason_", id),
-              "推荐理由",
-              class = "btn btn-sm btn-outline-secondary"
-            )
-          )
-        ),
-        div(
-          id = reason_id,
-          style = "display:none; margin-top:8px;",
-          tags$div(
-            class = "recommend-reason",
-            if (length(rs) == 0) {
-              tags$small("This chart fits the current data shape.")
-            } else {
-              tags$ul(
-                class = "mb-0",
-                lapply(rs, function(x) tags$li(tags$small(x)))
-              )
-            }
+            tags$small(
+              class = "text-muted",
+              sprintf("\u5206\u6570 %d", score)
+            ),
+            reason_block
+          ),
+          actionButton(
+            paste0("rec_select_", id),
+            "\u4f7f\u7528",
+            class = "btn btn-sm btn-primary flex-shrink-0"
           )
         )
       )
     }
 
-    top <- head(recs, 16)
+    # ── Grid layout ───────────────────────────────────────────────────────────
     div(
-      class = "recommend-list",
-      profile_block,
-      lapply(top, build_item)
+      class = "rec-preview-grid",
+      lapply(recs, build_card)
     )
   })
 

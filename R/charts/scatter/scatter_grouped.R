@@ -56,12 +56,6 @@ chart_def <- list(
   best_for    = "实验组对比、群体差异观察、PCA 风格二维结果展示",
   columns     = "x(numeric), y(numeric), group(categorical)",
 
-  sample_data = data.frame(
-    x = c(2.1, 2.9, 3.2, 5.6, 6.0, 6.5, 4.2, 4.7, 5.0),
-    y = c(1.9, 2.5, 2.1, 5.1, 5.8, 6.2, 4.0, 4.3, 4.9),
-    group = c("A", "A", "A", "B", "B", "B", "C", "C", "C")
-  ),
-
   options_def = list(
     list(
       id = "point_size", label = "点大小", type = "slider", group = "basic",

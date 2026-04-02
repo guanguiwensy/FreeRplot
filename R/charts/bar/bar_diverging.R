@@ -39,11 +39,7 @@ chart_def <- list(id = "bar_diverging", name = "发散柱状图", name_en = "Div
             options)
     }, category = "柱图家族", description = "正负值分别向两侧延伸，突出对比与变化方向", 
     best_for = "log2FC、盈亏对比、前后变化、问卷净推荐值", 
-    columns = "x(类别), y(含正负的数值)", sample_data = structure(list(
-        gene = c("GeneA", "GeneB", "GeneC", "GeneD", "GeneE", 
-        "GeneF", "GeneG", "GeneH", "GeneI", "GeneJ"), log2fc = c(2.3, 
-        -1.8, 1.1, -0.5, 3.1, -2.6, 0.8, -1.2, 1.7, -0.9)), class = "data.frame", row.names = c(NA, 
-    -10L)), options_def = list(list(id = "color_pos", label = "正值颜色", 
+    columns = "x(类别), y(含正负的数值)", options_def = list(list(id = "color_pos", label = "正值颜色", 
         type = "color", group = "basic", default = "#E74C3C"), 
         list(id = "color_neg", label = "负值颜色", type = "color", 
             group = "basic", default = "#3498DB"), list(id = "orientation", 

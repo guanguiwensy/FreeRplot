@@ -41,12 +41,7 @@ chart_def <- list(id = "bar", name = "柱状图", category = "通用图表",
         }
         apply_theme(p, options)
     }, description = "比较不同类别的数值大小", best_for = "类别比较、排名展示", 
-    columns = "category(类别), value(数值), group(分组，可选)", 
-    sample_data = structure(list(category = c("北京", "上海", 
-    "广州", "深圳", "杭州", "成都"), value = c(3.6, 3.8, 
-    2.5, 2.8, 1.8, 2.1), group = c("一线", "一线", "新一线", 
-    "一线", "新一线", "新一线")), class = "data.frame", row.names = c(NA, 
-    -6L)), options_def = list(list(id = "orientation", label = "方向", 
+    columns = "category(类别), value(数值), group(分组，可选)", options_def = list(list(id = "orientation", label = "方向", 
         type = "select", group = "basic", choices = c(纵向 = "vertical", 
         横向 = "horizontal"), default = "vertical"), list(id = "show_value_labels", 
         label = "显示数值标签", type = "checkbox", group = "basic", 

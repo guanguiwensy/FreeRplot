@@ -35,11 +35,7 @@ chart_def <- list(id = "bar_value", name = "数值柱状图", name_en = "Bar Cha
             options)
     }, category = "柱图家族", description = "使用已汇总的数值数据绘制柱图，支持排序与标签", 
     best_for = "已统计好的类别数值对比、KPI 展示", 
-    columns = "x(类别), y(数值)", sample_data = structure(list(
-        city = c("北京", "上海", "广州", "深圳", "成都", 
-        "武汉", "杭州"), gdp = c(42.6, 44.4, 28.8, 32.4, 
-        22.1, 18.9, 18.9)), class = "data.frame", row.names = c(NA, 
-    -7L)), options_def = list(list(id = "fill_color", label = "填充颜色", 
+    columns = "x(类别), y(数值)", options_def = list(list(id = "fill_color", label = "填充颜色", 
         type = "color", group = "basic", default = "#45B7D1"), 
         list(id = "orientation", label = "方向", type = "select", 
             group = "basic", choices = c(纵向 = "vertical", 

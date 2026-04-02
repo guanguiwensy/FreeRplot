@@ -205,10 +205,11 @@ run_ai_send_flow <- function(user_text, chart_id, input, session, rv, helpers, m
 
     patch_result <- withProgress(message = "AI is preparing a code patch...", value = 0.5, {
       safe_run(MODULE, chat_with_llm(
-        messages = list(list(role = "user", content = patch_prompt)),
-        api_key = api_key,
-        model = model,
-        api_url = api_url
+        messages  = list(list(role = "user", content = patch_prompt)),
+        api_key   = api_key,
+        model     = model,
+        api_url   = api_url,
+        json_mode = TRUE
       ))
     })
 

@@ -871,10 +871,12 @@ build_patch_prompt <- function(user_text, code, data_cols = character(0)) {
 
   paste0(
     "You are a precise R code editor. Your ONLY job is to make minimal changes to the code.\n",
-    "Return ONLY a single JSON object 鈥?no explanation, no markdown fences:\n",
-    "{\"patches\": [{\"search\": \"<exact string to find>\", \"replace\": \"<replacement>\"}]}\n\n",
+    "Return a JSON object with a \"patches\" array. Each element has exactly two string fields:\n",
+    "  search  - a substring that appears exactly once in the current code\n",
+    "  replace - the text to substitute in its place\n",
+    "Example: {\"patches\": [{\"search\": \"alpha = 0.5\", \"replace\": \"alpha = 0.8\"}]}\n\n",
     "Rules:\n",
-    "- Each 'search' must be a unique substring that appears exactly once in the code.\n",
+    "- Each 'search' must match exactly once in the code.\n",
     "- Keep changes minimal: touch only what the user asked for.\n",
     "- Preserve indentation and ggplot2 '+' chaining.\n",
     "- Never ask follow-up questions; pick reasonable defaults when details are missing.\n",
@@ -898,9 +900,13 @@ parse_patch_response <- function(response_text) {
     return(list(ok = FALSE, patches = NULL, raw = ""))
   }
 
-  # Strip markdown fences if the LLM disobeys instructions
-  clean <- gsub("```(?:json)?\\s*|```", "", response_text, perl = TRUE)
-  clean <- trimws(clean)
+  # With JSON mode enabled on the API side the response is guaranteed to be
+  # pure JSON — no markdown fences, no prose.  We therefore parse strictly:
+  # the trimmed response must begin with '{'.
+  clean <- trimws(response_text)
+  if (!startsWith(clean, "{")) {
+    return(list(ok = FALSE, patches = NULL, raw = response_text))
+  }
 
   parsed <- tryCatch(jsonlite::fromJSON(clean, simplifyVector = FALSE),
                      error = function(e) NULL)
@@ -910,7 +916,7 @@ parse_patch_response <- function(response_text) {
   }
 
   patches <- parsed$patches
-  # Normalise: each element must have search + replace strings
+  # Each element must have search + replace strings
   valid <- Filter(function(p) {
     is.list(p) && is.character(p$search) && is.character(p$replace)
   }, patches)

@@ -112,7 +112,14 @@ KIMI_API_URL <<- .KIMI_API_URL
 }
 
 # ── Exported: generic LLM call (OpenAI-compatible, all providers) ─────────────
-chat_with_llm <<- function(messages, api_key, model, api_url = .KIMI_API_URL) {
+#
+# json_mode [lgl] — when TRUE, adds response_format = {type:"json_object"} to
+#   the request body.  The API then guarantees the response is valid JSON with
+#   no markdown fences or surrounding prose.  Use only for structured-output
+#   calls (e.g. code patches); do NOT use for general chat because
+#   parse_chart_suggestion() expects a ```json``` fenced block.
+chat_with_llm <<- function(messages, api_key, model, api_url = .KIMI_API_URL,
+                           json_mode = FALSE) {
   if (is.null(api_key) || nchar(trimws(api_key)) == 0) {
     return(list(success = FALSE, content = "Please configure an API Key in Settings.", suggestion = NULL))
   }
@@ -121,17 +128,22 @@ chat_with_llm <<- function(messages, api_key, model, api_url = .KIMI_API_URL) {
   }
 
   tryCatch({
+    body <- list(
+      model       = model,
+      messages    = messages,
+      temperature = 0.2,
+      max_tokens  = 1800
+    )
+    if (isTRUE(json_mode)) {
+      body$response_format <- list(type = "json_object")
+    }
+
     resp <- httr2::request(api_url) |>
       httr2::req_headers(
         Authorization = paste("Bearer", trimws(api_key)),
         `Content-Type` = "application/json"
       ) |>
-      httr2::req_body_json(list(
-        model       = model,
-        messages    = messages,
-        temperature = 0.2,
-        max_tokens  = 1800
-      )) |>
+      httr2::req_body_json(body) |>
       httr2::req_timeout(60) |>
       httr2::req_perform()
 

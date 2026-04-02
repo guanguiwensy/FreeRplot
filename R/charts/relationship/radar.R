@@ -9,16 +9,6 @@ chart_def <- list(
   best_for = "能力画像、方案对比、综合评分展示",
   columns = "group(分组), 后续各列为指标数值（宽格式）",
 
-  sample_data = data.frame(
-    group = c("产品A", "产品B", "产品C"),
-    价格 = c(80, 65, 90),
-    质量 = c(90, 70, 75),
-    服务 = c(70, 85, 80),
-    口碑 = c(85, 75, 70),
-    创新 = c(75, 90, 85),
-    check.names = FALSE
-  ),
-
   options_def = list(
     list(
       id = "fill_alpha", label = "填充透明度", type = "slider", group = "basic",

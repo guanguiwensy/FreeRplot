@@ -60,14 +60,6 @@ chart_def <- list(
   best_for    = "三变量关系展示、影响力或权重对比",
   columns     = "x(numeric), y(numeric), size(numeric), group(optional), label(optional)",
 
-  sample_data = data.frame(
-    x = c(2, 4, 6, 8, 10, 12),
-    y = c(6, 4, 7, 8, 10, 11),
-    size = c(15, 35, 20, 55, 42, 68),
-    group = c("North", "North", "South", "South", "West", "West"),
-    label = c("A", "B", "C", "D", "E", "F")
-  ),
-
   options_def = list(
     list(
       id = "size_min", label = "最小气泡", type = "slider", group = "basic",

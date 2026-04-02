@@ -55,8 +55,6 @@ source("R/core/intent_engine.R")
 
 # Chart registry (depends on CHART_MENU_GROUPS)
 source("R/chart_registry.R")
-sample_files_written <- ensure_chart_sample_files(overwrite = FALSE)
-log_info("global", "Sample CSV files ready under data/samples (new files: %d)", sample_files_written)
 source("R/core/chart_capability_registry.R")
 CHART_CAP_REG <- load_chart_capability_registry(charts = CHARTS, refresh = FALSE)
 log_info("global", "Chart capability registry ready: %s", chart_capability_registry_path())

@@ -30,12 +30,7 @@ chart_def <- list(id = "bubble", name = "气泡图", category = "通用图表",
             size_max), name = "大小")
         apply_theme(p, options)
     }, description = "散点图变体，用气泡大小编码第三个变量", 
-    best_for = "三变量关系展示", columns = "x(数值), y(数值), size(气泡大小), label(标签，可选), group(分组，可选)", 
-    sample_data = structure(list(x = c(1, 2, 3, 4, 5, 6, 7), 
-        y = c(10, 20, 15, 25, 18, 30, 22), size = c(10, 30, 15, 
-        45, 20, 60, 25), label = c("A", "B", "C", "D", "E", "F", 
-        "G"), group = c("X", "X", "Y", "Y", "X", "Y", "X")), class = "data.frame", row.names = c(NA, 
-    -7L)), options_def = list(list(id = "size_min", label = "最小气泡尺寸", 
+    best_for = "三变量关系展示", columns = "x(数值), y(数值), size(气泡大小), label(标签，可选), group(分组，可选)", options_def = list(list(id = "size_min", label = "最小气泡尺寸", 
         type = "slider", group = "basic", min = 0.5, max = 10, 
         step = 0.5, default = 3), list(id = "size_max", label = "最大气泡尺寸", 
         type = "slider", group = "basic", min = 5, max = 35, 

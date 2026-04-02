@@ -43,11 +43,7 @@ chart_def <- list(id = "pie", name = "饼图", category = "通用图表",
         }
         p
     }, description = "展示各部分占总体的比例", best_for = "比例关系展示，类别不超过7个", 
-    columns = "label(标签), value(数值)", sample_data = structure(list(
-        label = c("直接访问", "搜索引擎", "邮件营销", 
-        "联盟广告", "视频广告"), value = c(335, 310, 
-        234, 135, 148)), class = "data.frame", row.names = c(NA, 
-    -5L)), options_def = list(list(id = "label_type", label = "标签类型", 
+    columns = "label(标签), value(数值)", options_def = list(list(id = "label_type", label = "标签类型", 
         type = "select", group = "basic", choices = c(百分比 = "percent", 
         数量 = "count", `名称+百分比` = "both"), default = "percent"), 
         list(id = "donut_ratio", label = "甜甜圈内径(0=实心)", 

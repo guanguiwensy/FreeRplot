@@ -25,8 +25,8 @@ plot_preview_card_ui <- function() {
           selectInput(
             "chart_type_select",
             label    = NULL,
-            choices  = build_grouped_choices(CHARTS),
-            selected = "scatter_basic",
+            choices  = c("（请选择图表类型）" = "", build_grouped_choices(CHARTS)),
+            selected = "",
             width    = "185px"
           ),
 

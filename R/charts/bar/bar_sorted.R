@@ -44,12 +44,7 @@ chart_def <- list(id = "bar_sorted", name = "排序柱状图", name_en = "Sorted
         apply_theme(p + ggplot2::labs(x = x_col, y = y_col), 
             options)
     }, category = "柱图家族", description = "按数值大小排序的柱图，可选颜色随数值渐变", 
-    best_for = "变量重要性排序、得分对比", columns = "x(类别), y(数值)", 
-    sample_data = structure(list(city = c("北京", "上海", 
-    "广州", "深圳", "成都", "武汉", "杭州", "重庆", 
-    "西安", "南京"), value = c(42.6, 44.4, 28.8, 32.4, 22.1, 
-    18.9, 18.9, 29.1, 10.7, 16.4)), class = "data.frame", row.names = c(NA, 
-    -10L)), options_def = list(list(id = "color_palette", label = "配色", 
+    best_for = "变量重要性排序、得分对比", columns = "x(类别), y(数值)", options_def = list(list(id = "color_palette", label = "配色", 
         type = "select", group = "basic", choices = c(默认 = "默认", 
         商务蓝 = "商务蓝", 自然绿 = "自然绿", 活力橙 = "活力橙", 
         粉紫系 = "粉紫系"), default = "默认"), list(id = "sort_bars", 

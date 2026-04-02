@@ -45,15 +45,7 @@ chart_def <- list(id = "circos", name = "弦图", name_en = "Chord Diagram (Circ
         structure(list(draw = draw_fn), class = "circos_plot")
     }, description = "用弧线连接环形扇区，直观展示类别之间的流向与关联强度，哈佛 Nature 风格", 
     best_for = "群体间基因共享、物种迁移流向、模块间交互强度、相关矩阵可视化", 
-    columns = "from(来源分组), to(目标分组), value(流量/权重，数值)", 
-    sample_data = structure(list(from = c("免疫细胞", "免疫细胞", 
-    "免疫细胞", "肿瘤细胞", "肿瘤细胞", "基质细胞", 
-    "基质细胞", "内皮细胞", "内皮细胞", "神经元", 
-    "神经元"), to = c("肿瘤细胞", "基质细胞", "内皮细胞", 
-    "基质细胞", "神经元", "内皮细胞", "神经元", 
-    "神经元", "免疫细胞", "免疫细胞", "肿瘤细胞"
-    ), value = c(35, 20, 15, 28, 12, 18, 10, 22, 16, 14, 25)), class = "data.frame", row.names = c(NA, 
-    -11L)), options_def = list(list(id = "circos_transparency", 
+    columns = "from(来源分组), to(目标分组), value(流量/权重，数值)", options_def = list(list(id = "circos_transparency", 
         label = "连接透明度", type = "slider", group = "basic", 
         min = 0, max = 0.8, step = 0.05, default = 0.25), list(
         id = "gap_size", label = "扇区间距", type = "slider", 

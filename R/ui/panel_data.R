@@ -5,7 +5,9 @@
 #            1. quick actions (load / download sample)
 #            2. current data-source badge
 #            3. compact import card with file / paste modes
-#            4. current data table shown in a simple handsontable area
+#            4. current data table shown in an rhandsontable area
+#               (wrapped in overflow-x:auto for horizontal scrolling on
+#                wide datasets; stretchH="last" preserves natural col widths)
 #
 # Exports:
 #   tab_data_ui()
@@ -119,7 +121,10 @@ tab_data_ui <- function() {
       ),
       div(
         class = "data-table-shell",
-        rHandsontableOutput("data_table", height = "200px")
+        div(
+          style = "overflow-x: auto; width: 100%;",
+          rHandsontableOutput("data_table", height = "200px")
+        )
       )
     )
   )

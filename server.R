@@ -13,24 +13,34 @@
 #   init_mod_overlay   — overlay sync and combined SVG/PDF export
 #
 # Shared reactive state (rv):
-#   messages        [list]  OpenAI-format message history (includes system prompt)
-#   current_data    [df]    active dataset (updated by mod_data, mod_ai_chat)
-#   current_data_source [chr]  current data origin: sample | upload | paste | user_edit
-#   suggestion      [list]  most recent AI chart recommendation (or NULL)
-#   current_plot    [ggplot|circos|NULL]  rendered plot object
-#   current_plot_code [chr|NULL]  last successful 1:1 synchronized R script
-#   api_config      [list]  {provider, api_key, model, custom_url}
-#   pending_intent  [list|NULL]  medium-confidence intent awaiting confirmation
-#   patch_history   [list]  undo stack — snapshots of input state (max 10)
+#   messages                     [list]   OpenAI-format message history
+#   current_data                 [df|NULL] active dataset
+#   current_data_source          [chr]    "none"|"sample"|"upload"|"paste"|"user_edit"
+#   current_data_file            [chr|NULL] path to temp CSV for current data
+#   preserve_data_on_chart_change [lgl]   if TRUE, next chart_type_select event
+#                                          skips sample-swap (consumed once)
+#   suggestion                   [list|NULL] most recent AI chart recommendation
+#   current_plot                 [ggplot|circos|NULL] rendered plot object
+#   current_plot_code            [chr|NULL] last successful R script
+#   overlay_scene_json           [chr]    JSON of overlay annotation objects
+#   overlay_shared_points        [list]   data points synced to overlay layer
+#   last_run_error               [chr|NULL] last code-editor eval error message
+#   api_config                   [list]   {provider, api_key, model, custom_url}
+#   pending_intent               [list|NULL] medium-confidence intent awaiting confirm
+#   patch_history                [list]   undo stack — input snapshots (max 10)
+#   chart_recommendations        [list]   top-N recommendation objects (set by
+#                                          ai_chat_handlers run_recommendations)
+#   chart_recommend_profile      [list|NULL] data profile from recommender
+#   chart_recommend_previews     [list]   chart_id → base64 PNG preview string
 # =============================================================================
 
 server <- function(input, output, session) {
 
   rv <- reactiveValues(
     messages        = list(list(role = "system", content = build_system_prompt())),
-    current_data    = CHARTS[["scatter_basic"]]$sample_data,
-    current_data_source = "sample",
-    current_data_file = file.path(APP_DIR, "data", "samples", "scatter_basic.csv"),
+    current_data    = NULL,
+    current_data_source = "none",
+    current_data_file = NULL,
     preserve_data_on_chart_change = FALSE,
     suggestion      = NULL,
     current_plot    = NULL,
@@ -42,7 +52,8 @@ server <- function(input, output, session) {
     pending_intent  = NULL,
     patch_history   = list(),
     chart_recommendations = list(),
-    chart_recommend_profile = NULL
+    chart_recommend_profile = NULL,
+    chart_recommend_previews = list()
   )
 
   init_mod_settings(input, output, session, rv)

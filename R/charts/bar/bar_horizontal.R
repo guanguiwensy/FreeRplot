@@ -37,11 +37,7 @@ chart_def <- list(id = "bar_horizontal", name = "横向排序柱状图", name_en
             options)
     }, category = "柱图家族", description = "横向排列柱图，适合长标签和 TopN 排名展示", 
     best_for = "排名对比、长标签类别、富集分析结果", 
-    columns = "x(类别), y(数值)", sample_data = structure(list(
-        city = c("北京", "上海", "广州", "深圳", "成都", 
-        "武汉", "杭州", "重庆", "西安", "南京"), value = c(42.6, 
-        44.4, 28.8, 32.4, 22.1, 18.9, 18.9, 29.1, 10.7, 16.4)), class = "data.frame", row.names = c(NA, 
-    -10L)), options_def = list(list(id = "fill_color", label = "填充颜色", 
+    columns = "x(类别), y(数值)", options_def = list(list(id = "fill_color", label = "填充颜色", 
         type = "color", group = "basic", default = "#FF6B6B"), 
         list(id = "top_n", label = "显示前N条(0=全部)", 
             type = "numeric", group = "basic", default = 0, min = 0, 

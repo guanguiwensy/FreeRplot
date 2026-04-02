@@ -98,11 +98,6 @@ chart_def <- list(
   best_for    = "相关性探索、初步模式识别",
   columns     = "x(numeric), y(numeric), group(optional), label(optional)",
 
-  sample_data = data.frame(
-    x = c(1, 2, 3, 4, 5, 6, 7, 8),
-    y = c(1.4, 2.1, 3.4, 3.8, 5.2, 5.9, 6.8, 8.1)
-  ),
-
   options_def = list(
     list(
       id = "point_size", label = "点大小", type = "slider", group = "basic",

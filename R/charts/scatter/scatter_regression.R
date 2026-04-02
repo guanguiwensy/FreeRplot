@@ -74,12 +74,6 @@ chart_def <- list(
   best_for    = "趋势检验、相关建模、组内外拟合关系观察",
   columns     = "x(numeric), y(numeric), group(optional)",
 
-  sample_data = data.frame(
-    x = c(3, 5, 8, 10, 12, 15, 18, 20, 23, 25),
-    y = c(4.2, 5.3, 7.9, 9.5, 10.7, 13.2, 14.4, 16.3, 17.8, 19.6),
-    group = c("Control", "Control", "Control", "Control", "Case", "Case", "Case", "Case", "Case", "Case")
-  ),
-
   options_def = list(
     list(
       id = "point_size", label = "点大小", type = "slider", group = "basic",

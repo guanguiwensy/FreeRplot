@@ -1,13 +1,21 @@
 # =============================================================================
 # File   : R/ui/panel_recommend.R
-# Purpose: Independent chart recommendation panel shown below AI chat.
+# Purpose: Chart recommendation panel shown below AI chat (left column).
+#          Static shell only — dynamic content is rendered by
+#          output$chart_recommend_ui in R/ui/chat_renderers.R.
+#
+#          Interaction flow:
+#            "图形推荐" button (recommend_run_btn)
+#              → settings modal: column selection + count (rec_col_select,
+#                rec_count, rec_run_confirm_btn)
+#              → recommendation engine runs in server
+#              → chart_recommend_ui fills with preview card grid
+#              → each card has a "使用" button (rec_select_{chart_id})
 #
 # Exports:
 #   chart_recommend_panel_ui()
-#     Returns the recommendation card with:
-#       - refresh button: "图形推荐"
-#       - candidate actions: "选择" / "推荐理由"
-#       - collapse toggle for hide/show
+#     Returns the bslib card shell with header controls and
+#     uiOutput("chart_recommend_ui") body.  No parameters.
 # =============================================================================
 
 chart_recommend_panel_ui <- function() {

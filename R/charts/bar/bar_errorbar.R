@@ -77,10 +77,7 @@ chart_def <- list(id = "bar_errorbar", name = "误差线柱状图", name_en = "B
             options)
     }, category = "柱图家族", description = "柱图叠加误差线，展示均值与不确定性（SD/SE/CI）", 
     best_for = "科研组间对比、均值置信区间展示", 
-    columns = "x(组别), y(均值), sd(标准差，可选) 或 ymin+ymax(误差区间)", 
-    sample_data = structure(list(group = c("对照组", "处理A", 
-    "处理B"), mean = c(45.2, 62.8, 55.1), sd = c(8.3, 9.1, 
-    7.5)), class = "data.frame", row.names = c(NA, -3L)), options_def = list(
+    columns = "x(组别), y(均值), sd(标准差，可选) 或 ymin+ymax(误差区间)", options_def = list(
         list(id = "color_palette", label = "配色", type = "select", 
             group = "basic", choices = c(默认 = "默认", 商务蓝 = "商务蓝", 
             自然绿 = "自然绿", 活力橙 = "活力橙", 

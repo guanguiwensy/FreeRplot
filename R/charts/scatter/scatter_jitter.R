@@ -62,12 +62,6 @@ chart_def <- list(
   best_for    = "重叠点可视化、离散测量值分布检查",
   columns     = "x(numeric), y(numeric), group(optional)",
 
-  sample_data = data.frame(
-    x = c(1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4),
-    y = c(4, 4, 5, 5, 6, 5, 7, 7, 6, 8, 8, 9),
-    group = rep(c("G1", "G2"), each = 6)
-  ),
-
   options_def = list(
     list(
       id = "point_size", label = "点大小", type = "slider", group = "basic",

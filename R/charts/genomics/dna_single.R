@@ -19,9 +19,7 @@ chart_def <- list(id = "dna_single", name = "单序列图", name_en = "Single DN
             return = TRUE)
     }, category = "基因序列", description = "将单条 DNA/RNA 序列按行显示，A/T/C/G 碱基用不同颜色标注", 
     best_for = "展示单条基因序列结构、论文级别序列可视化", 
-    columns = "sequence(单条 DNA/RNA 序列字符串，仅需一行)", 
-    sample_data = structure(list(sequence = "GGCGGCGGCGGCGGCGGCGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCGGCGGAGGAGGCGGCG"), class = "data.frame", row.names = c(NA, 
-    -1L)), options_def = list(list(id = "line_wrap", label = "每行碱基数", 
+    columns = "sequence(单条 DNA/RNA 序列字符串，仅需一行)", options_def = list(list(id = "line_wrap", label = "每行碱基数", 
         type = "slider", group = "basic", min = 10, max = 150, 
         step = 5, default = 50), list(id = "dna_palette", label = "碱基配色", 
         type = "select", group = "basic", choices = c(高亮深色 = "bright_deep", 
